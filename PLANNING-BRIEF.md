@@ -83,7 +83,7 @@ She forwards the link to the CTO with: *"Take a look — Senior Full-Stack candi
 3. Notes the URL doesn't say `localhost`, the page loads under 2 seconds, the streaming is smooth.
 4. Opens DevTools — checks the network tab. Sees streamed SSE responses. Sees tRPC procedure calls.
 5. Opens the GitHub repo from the footer link.
-6. Reads the README — sees the decision log: *why pgvector over a managed vector DB, why role-separated single calls in v1, why Vercel AI SDK over raw Anthropic for v2.*
+6. Reads the README — sees the decision log: *why pgvector over a managed vector DB, why role-separated single calls in v1, why Vercel AI SDK over raw provider SDKs for v2, why a free-tier provider chain (Groq → Gemini → OpenRouter) instead of a paid primary.*
 7. Skims `git log` — sees 30+ atomic gitmoji commits, no AI attribution, professional history.
 8. Skims `.ai/docs/06-agent-system-design.md` — sees the agent prompts laid out, the handoff protocol, the JSON schemas.
 9. Adds Samuel to the "yes" pile.
@@ -199,7 +199,7 @@ After agents finish:
 | **Database** | Supabase Postgres + pgvector | Acquisity's stack. Free tier sufficient. pgvector for cache + embeddings. |
 | **Vector embeddings** | Gemini `text-embedding-004` | Free tier. 768 dims — sufficient for cache lookup; smaller HNSW index than 1,536d alternatives. (Note: OpenAI's embedding model is `text-embedding-3-small`; `text-embedding-004` is exclusively a Gemini name.) |
 | **Search tool** | Tavily Search API (free tier 1,000/mo) | Built for LLM agents. Returns clean markdown. Falls back to DuckDuckGo HTML scrape if quota hit. |
-| **Scrape tool** | `web_fetch` (Anthropic) or fetch + Mozilla Readability | Reading specific URLs the agent picks. |
+| **Scrape tool** | `web_fetch` (custom: native `fetch` + HTML strip, capped at 4 KB) | Reading specific URLs the agent picks; provider-agnostic. SSRF guards block localhost/private IPs. |
 | **Deploy** | Vercel | Acquisity's stack. Edge functions for streaming. |
 | **DB hosting** | Supabase (Singapore region, lowest latency from Nairobi) | Free tier; 500MB enough for the demo. |
 | **Auth (Phase 3)** | Supabase Auth, magic-link only | 5-minute setup. Just gates the demo from abuse. Optional; landing page still works without login. |
@@ -228,14 +228,16 @@ NEXT.JS 15 APP ROUTER (Vercel Edge)
               │                                  embeddings table with HNSW)
               │   (if cache hit, stream cached result + return early)
               │
-              ├── AGENT 1: Reconnaissance ──► Tavily search ─► Anthropic Claude
-              │                                    │              (Sonnet 4)
+              ├── AGENT 1: Reconnaissance ──► Tavily search ─► chat() — Groq Llama 3.3 70B
+              │                                    │              (fallback: Gemini → OpenRouter)
               │                                    ▼
               │                               web_fetch (specific URLs)
               │
-              ├── AGENT 2: People & ICP ────► Tavily search ─► Anthropic Claude
+              ├── AGENT 2: People & ICP ────► Tavily search ─► chat() — Groq Llama 3.3 70B
+              │                                                  (fallback: Gemini → OpenRouter)
               │
-              └── AGENT 3: Personalisation ─► (no tools) ─────► Anthropic Claude
+              └── AGENT 3: Personalisation ─► (no tools) ─────► chat() — Groq Llama 3.3 70B
+                                                                (fallback: Gemini → OpenRouter)
                           │
                           ▼
               Final structured JSON output
@@ -572,13 +574,11 @@ This must be free or near-free. The whole project should run on free tiers.
 | Sentry | 5K errors/mo free | $0 |
 | GitHub Actions | 2,000 min/mo free | $0 |
 
-**Per-run cost estimate (no cache):** ~$0.04 (Anthropic) + ~$0.0002 (embeddings) = **~$0.04 per fresh run**.
+**Per-run cost estimate (no cache):** **$0.00** — Groq Llama 3.3 70B free tier (14,400 req/day), Gemini 2.5 Flash fallback (1,500 req/day), OpenRouter free Llama as last resort, Gemini `text-embedding-004` (free).
 
-**100 demo runs ≈ $4.** Acceptable.
+**100 demo runs ≈ $0.** Cache strategy further reduces upstream calls.
 
-**Cache strategy** keeps the demo on Acquisity at ~$0 after the first run.
-
-**Hard cap**: I will set up Anthropic budget alert at $20/month. If hit, the app returns a polite "demo capacity reached" message rather than billing me into oblivion.
+**Free-tier guard**: if all three providers are simultaneously degraded (extremely rare — they share no infrastructure), the app returns a polite "demo capacity reached. Try again in an hour." message rather than failing silently.
 
 ---
 
@@ -617,7 +617,7 @@ This must be free or near-free. The whole project should run on free tiers.
 
 | Task | Acceptance criterion |
 |---|---|
-| Migrate Anthropic calls to Vercel AI SDK | `streamText` + `tool` working |
+| Migrate provider chain to Vercel AI SDK | `streamText` + `tool` working with Groq → Gemini → OpenRouter fallback intact |
 | Add OpenAI embeddings + pgvector cache | "Run on Acquisity" second time → <300ms response from cache |
 | Visible tool-call UI | Tool calls render with input/output expandable |
 | Past Runs page | `/runs` shows last 10 public runs |
@@ -661,7 +661,7 @@ This must be free or near-free. The whole project should run on free tiers.
 | R6 | README slips into desperate tone | Medium | Medium | Treat the README as a technical decision log. Read aloud — if any sentence sounds like a sales pitch, delete it. |
 | R7 | Agent 2 returns fabricated people | High | Catastrophic | Hard rule in system prompt: real people only. Validate every name against at least one source URL before showing. |
 | R8 | "Run on Acquisity" returns embarrassing output | High | High | Test on Acquisity in development before deploying. If output is bad, iterate prompts before shipping the public link. |
-| R9 | Anthropic budget blown by attackers | Medium | High | Rate limit by IP from Phase 1. Hard cap monthly spend at $20. Disable site gracefully if hit. |
+| R9 | Free-tier quotas (Groq 14.4k/day, Gemini 1.5k/day, OpenRouter ~50/day) all exhausted simultaneously | Low | Medium | Three-provider fallback chain keeps the demo running until at least one tier remains. Rate limit by IP from Phase 1. If all three tiers go red, app shows "demo capacity reached. Try again in an hour." rather than erroring. No paid provider is added — free-tier resilience is part of the demo's value proposition. |
 | R10 | Domain `outbound-lab.vercel.app` not memorable | Low | Low | Acceptable for v1. Buy `outbound-lab.com` ($12) only if the project keeps gaining traction. |
 
 ---
