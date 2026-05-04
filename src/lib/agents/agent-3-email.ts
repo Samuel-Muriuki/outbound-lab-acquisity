@@ -1,0 +1,166 @@
+import "server-only";
+import { chat } from "./llm/chat";
+import {
+  EmailOutput,
+  type EmailOutputT,
+  type PeopleOutputT,
+  type ReconnaissanceOutputT,
+} from "./schemas";
+import { EMAIL_SYSTEM, emailUserPrompt } from "./prompts/email";
+import { extractJSON } from "./utils/extract-json";
+import { findForbiddenPhrase } from "./utils/forbidden-phrases";
+import type { EmitFn } from "./stream-events";
+
+/** Per `.ai/docs/06-agent-system-design.md` §8.4 — creative agent vs factual. */
+const TEMPERATURE = 0.7;
+
+/** Per §9.3 — retry once on forbidden-phrase OR Zod failure, then surface as-is for `degraded` marking. */
+const MAX_RETRIES = 1;
+
+const MAX_TOKENS = 1_024;
+
+export interface RunAgent3Options {
+  tone?: "cold" | "warm";
+}
+
+export interface Agent3Result {
+  /** The email itself. Always returned, even if `degraded` is true. */
+  output: EmailOutputT;
+  /**
+   * True when both the initial attempt and the retry produced output
+   * that tripped the forbidden-phrase regex. The orchestrator (Session 4
+   * PR L) reads this and marks `research_runs.status = 'degraded'` so
+   * the result card can show a "draft was retried — review carefully"
+   * banner per the brand voice rules.
+   */
+  degraded: boolean;
+  /** First forbidden-phrase reason captured (for telemetry / debugging). */
+  forbiddenReason: string | null;
+}
+
+/**
+ * Agent 3 — Personalisation & Outreach.
+ *
+ * Pure-reasoning agent. No tools — receives the prior agents' structured
+ * outputs as JSON in the user prompt and returns a single email JSON
+ * object plus 5 alternate hooks.
+ *
+ * Two failure modes the model can still hit despite the system prompt:
+ *  1. Zod schema mismatch (wrong field shape, missing personalisation_hooks)
+ *  2. Forbidden-phrase leak (marketing cliches the prompt forbids)
+ *
+ * Both trigger a single retry with a corrective user message. If the
+ * retry also fails, returns whatever the model produced and signals
+ * `degraded: true` so the orchestrator can flag the run.
+ *
+ * Stream events emitted via `emit`:
+ *  - provider_used (per chat() call)
+ *  - agent_thinking (on retry, with the failing reason)
+ *
+ * @param brief — Agent 1 output (validated upstream)
+ * @param people — Agent 2 output (post-validation already applied)
+ * @param _runId — research_runs.id; reserved for Session 4 PR L's per-agent message log
+ * @param emit — stream-event callback for the orchestrator's SSE channel
+ * @param options.tone — 'cold' (default) or 'warm' (Phase 2 regenerate-warmer button)
+ *
+ * @throws AllProvidersFailedError if every LLM provider is degraded
+ * @throws Zod validation error after retry exhaustion (orchestrator catches & marks failed)
+ */
+export async function runAgent3(
+  brief: ReconnaissanceOutputT,
+  people: PeopleOutputT,
+  _runId: string,
+  emit: EmitFn,
+  options: RunAgent3Options = {}
+): Promise<Agent3Result> {
+  const tone = options.tone ?? "cold";
+  let firstForbiddenReason: string | null = null;
+  let lastZodError: Error | null = null;
+
+  for (let attempt = 0; attempt < MAX_RETRIES + 1; attempt++) {
+    const userPrompt =
+      attempt === 0
+        ? emailUserPrompt(brief, people, tone)
+        : buildRetryPrompt(brief, people, tone, firstForbiddenReason, lastZodError);
+
+    const result = await chat(
+      {
+        system: EMAIL_SYSTEM,
+        messages: [{ role: "user", content: userPrompt }],
+        temperature: TEMPERATURE,
+        maxTokens: MAX_TOKENS,
+        responseFormat: "json",
+      },
+      (provider) => emit({ type: "provider_used", agent: 3, provider })
+    );
+
+    let parsed: EmailOutputT;
+    try {
+      const json = extractJSON(result.text);
+      parsed = EmailOutput.parse(json);
+    } catch (err) {
+      lastZodError = err instanceof Error ? err : new Error(String(err));
+      if (attempt < MAX_RETRIES) {
+        emit({
+          type: "agent_thinking",
+          agent: 3,
+          delta: `Retry — output didn't match schema: ${lastZodError.message.slice(0, 120)}`,
+        });
+        continue;
+      }
+      // Out of retries — surface the schema error.
+      throw lastZodError;
+    }
+
+    const hit = findForbiddenPhrase(parsed.body);
+    if (hit) {
+      firstForbiddenReason = firstForbiddenReason ?? hit.reason;
+      if (attempt < MAX_RETRIES) {
+        emit({
+          type: "agent_thinking",
+          agent: 3,
+          delta: `Retry — body contained ${hit.reason}: "${hit.match}"`,
+        });
+        continue;
+      }
+      // Out of retries — return the email anyway, but flag `degraded`.
+      return {
+        output: parsed,
+        degraded: true,
+        forbiddenReason: firstForbiddenReason,
+      };
+    }
+
+    // Clean output.
+    return {
+      output: parsed,
+      degraded: false,
+      forbiddenReason: null,
+    };
+  }
+
+  // Unreachable: the loop always returns or throws inside.
+  throw new Error("Agent 3 exhausted retries without producing output.");
+}
+
+/**
+ * Constructs the user prompt for the retry attempt, including a
+ * specific corrective note about what failed the first time.
+ */
+function buildRetryPrompt(
+  brief: ReconnaissanceOutputT,
+  people: PeopleOutputT,
+  tone: "cold" | "warm",
+  forbiddenReason: string | null,
+  zodError: Error | null
+): string {
+  const correction = forbiddenReason
+    ? `Your previous draft contained a ${forbiddenReason}. Rewrite WITHOUT any of the forbidden phrases listed in the system prompt. Be specific and quiet — the brief has plenty of factual hooks to open with.`
+    : zodError
+      ? `Your previous output did not match the required JSON schema (${zodError.message.slice(0, 200)}). Output ONLY the JSON object with all required fields populated.`
+      : "Try again, sticking strictly to the system-prompt requirements.";
+
+  return `${correction}
+
+${emailUserPrompt(brief, people, tone)}`;
+}

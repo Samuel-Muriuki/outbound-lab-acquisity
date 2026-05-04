@@ -90,3 +90,39 @@ export const PeopleOutput = z.object({
     .describe("0-3 recent hiring/funding/launch signals worth opening with."),
 });
 export type PeopleOutputT = z.infer<typeof PeopleOutput>;
+
+/**
+ * Agent 3 — Personalisation & Outreach
+ *
+ * The deliverable: one cold email to the first decision maker plus
+ * five alternate personalisation hooks. No tools — pure reasoning over
+ * Agent 1 + Agent 2's outputs. Temperature 0.7 (vs 0.2 for the
+ * factual agents).
+ *
+ * Post-validated by isEmailAcceptable() in agent-3-email.ts — if the
+ * model leaks any of the forbidden marketing phrases ("hope this email
+ * finds you well", "amazing", "game-changing", etc.) the run is retried
+ * once and then marked degraded.
+ */
+export const EmailOutput = z.object({
+  to: z.object({
+    name: z.string().min(2).max(80),
+    role: z.string().min(2).max(120),
+  }),
+  subject: z
+    .string()
+    .min(5)
+    .max(80)
+    .describe("≤80 chars; the prompt instructs ≤50 — Zod is the soft cap."),
+  body: z
+    .string()
+    .min(50)
+    .max(900)
+    .describe("≤900 chars; the prompt instructs ≤120 words."),
+  personalisation_hooks: z
+    .array(z.string().min(10).max(200))
+    .length(5)
+    .describe("Exactly 5 alternate one-line opening hooks for variation."),
+  tone: z.enum(["cold", "warm"]),
+});
+export type EmailOutputT = z.infer<typeof EmailOutput>;
