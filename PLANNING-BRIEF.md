@@ -197,7 +197,7 @@ After agents finish:
 | **AI orchestration (Phase 1)** | Direct OpenAI SDK (Groq compatible) + Gemini SDK | Simpler for Phase 1; one fewer dependency to debug while shipping fast. |
 | **AI orchestration (Phase 2+)** | Vercel AI SDK | Acquisity's stack. `streamText` + `tool` + `useChat` is the cleanest streaming-tool-call protocol in Next.js. |
 | **Database** | Supabase Postgres + pgvector | Acquisity's stack. Free tier sufficient. pgvector for cache + embeddings. |
-| **Vector embeddings** | OpenAI `text-embedding-004` | $0.02/1M tokens. Industry default. 1,536 dims, fits HNSW with low memory. |
+| **Vector embeddings** | Gemini `text-embedding-004` | Free tier. 768 dims — sufficient for cache lookup; smaller HNSW index than 1,536d alternatives. (Note: OpenAI's embedding model is `text-embedding-3-small`; `text-embedding-004` is exclusively a Gemini name.) |
 | **Search tool** | Tavily Search API (free tier 1,000/mo) | Built for LLM agents. Returns clean markdown. Falls back to DuckDuckGo HTML scrape if quota hit. |
 | **Scrape tool** | `web_fetch` (Anthropic) or fetch + Mozilla Readability | Reading specific URLs the agent picks. |
 | **Deploy** | Vercel | Acquisity's stack. Edge functions for streaming. |
