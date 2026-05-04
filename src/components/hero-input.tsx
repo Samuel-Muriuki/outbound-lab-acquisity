@@ -7,6 +7,7 @@ import {
   useTransition,
   type FormEvent,
 } from "react";
+import { useRouter } from "next/navigation";
 import { ArrowRight, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,15 +22,15 @@ const ACQUISITY_PRESET = "https://acquisity.com";
  */
 const PRESET_AUTOSUBMIT_DELAY_MS = 600;
 
+interface PostResearchResponse {
+  run_id?: string;
+  error?: string;
+  issues?: Array<{ path: string; message: string }>;
+}
+
 /**
- * Hero URL input. Phase 1 PR A + B: client-side validation only,
- * plus the "Try it on Acquisity" preset trigger.
- *
- * On valid submit, the input enters a submitting state but does NOT yet
- * call the API — that wires up in a later PR alongside the
- * `/api/research` route handler. Until then submitting just logs the
- * normalised URL and resets after a short delay so the loading state is
- * inspectable.
+ * Hero URL input. Validates client-side, POSTs to `/api/research`, then
+ * navigates to `/research/[id]` on success.
  *
  * Visual states per `.ai/docs/12-ux-flows.md` §1.4:
  *   idle      → border-border, no ring
@@ -39,6 +40,7 @@ const PRESET_AUTOSUBMIT_DELAY_MS = 600;
  *   submitting→ Loader2 spin + 'Researching…' label, input disabled
  */
 export function HeroInput() {
+  const router = useRouter();
   const inputId = useId();
   const errorId = `${inputId}-error`;
   const formRef = useRef<HTMLFormElement>(null);
@@ -54,13 +56,38 @@ export function HeroInput() {
       return;
     }
     setError(null);
-    startSubmit(() => {
-      // Placeholder: the next PR replaces this with a POST to /api/research
-      // followed by router.push(`/research/${run_id}`).
-      console.info("[HeroInput] would research:", result.data.url);
-      return new Promise<void>((resolve) => {
-        setTimeout(resolve, 600);
-      });
+    startSubmit(async () => {
+      try {
+        const response = await fetch("/api/research", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: result.data.url }),
+        });
+        const body: PostResearchResponse = await response
+          .json()
+          .catch(() => ({}));
+
+        if (!response.ok) {
+          const message =
+            body.issues?.[0]?.message ??
+            body.error ??
+            "Could not start research. Try again.";
+          setError(message);
+          return;
+        }
+
+        if (!body.run_id) {
+          setError("Server returned an unexpected response. Try again.");
+          return;
+        }
+
+        router.push(`/research/${body.run_id}`);
+        // Intentionally NOT clearing `isSubmitting` — the loading state
+        // stays on through the route transition until the destination
+        // page mounts.
+      } catch {
+        setError("Connection lost. Check your network and try again.");
+      }
     });
   }
 
