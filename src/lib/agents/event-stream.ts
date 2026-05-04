@@ -69,32 +69,31 @@ export function createEventStream() {
     },
 
     [Symbol.asyncIterator](): AsyncIterableIterator<StreamEvent> {
-      const self = this;
-      return {
-        next: (): Promise<IteratorResult<StreamEvent>> => {
-          if (queue.length > 0) {
-            return Promise.resolve({ value: queue.shift()!, done: false });
-          }
-          if (error !== null) {
-            const captured = error;
-            error = null;
-            return Promise.reject(captured);
-          }
-          if (closed) {
-            return Promise.resolve({
-              value: undefined as unknown as StreamEvent,
-              done: true,
-            });
-          }
-          return new Promise<IteratorResult<StreamEvent>>((resolve, reject) => {
-            pendingResolve = resolve;
-            pendingReject = reject;
+      const next = (): Promise<IteratorResult<StreamEvent>> => {
+        if (queue.length > 0) {
+          return Promise.resolve({ value: queue.shift()!, done: false });
+        }
+        if (error !== null) {
+          const captured = error;
+          error = null;
+          return Promise.reject(captured);
+        }
+        if (closed) {
+          return Promise.resolve({
+            value: undefined as unknown as StreamEvent,
+            done: true,
           });
-        },
-        [Symbol.asyncIterator]() {
-          return self[Symbol.asyncIterator]();
-        },
+        }
+        return new Promise<IteratorResult<StreamEvent>>((resolve, reject) => {
+          pendingResolve = resolve;
+          pendingReject = reject;
+        });
       };
+      const iterator: AsyncIterableIterator<StreamEvent> = {
+        next,
+        [Symbol.asyncIterator]: () => iterator,
+      };
+      return iterator;
     },
   };
 }
