@@ -1,6 +1,8 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# dependencies
+# ============================================
+# DEPENDENCIES
+# ============================================
 /node_modules
 /.pnp
 .pnp.*
@@ -10,32 +12,79 @@
 !.yarn/releases
 !.yarn/versions
 
-# testing
-/coverage
-
-# next.js
+# ============================================
+# BUILD ARTIFACTS
+# ============================================
 /.next/
 /out/
-
-# production
 /build
+/dist
 
-# misc
+# ============================================
+# AI AGENT FOLDERS — ALWAYS GITIGNORE
+# ============================================
+.ai/
+.claude/
+
+# ============================================
+# ENVIRONMENT FILES
+# ============================================
+.env*
+# .env.example is intentionally tracked — it's the documented template
+!.env.example
+
+# ============================================
+# TESTING ARTIFACTS
+# ============================================
+/coverage
+playwright-report/
+test-results/
+.nyc_output/
+tests/fixtures/credentials/
+tests/fixtures/*.env
+
+# ============================================
+# IDE & EDITOR
+# ============================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ============================================
+# OS FILES
+# ============================================
 .DS_Store
-*.pem
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
 
-# debug
+# ============================================
+# LOGS
+# ============================================
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
-
-# vercel
+# ============================================
+# MISC
+# ============================================
+*.pem
 .vercel
+.turbo
 
-# typescript
+# ============================================
+# TYPESCRIPT
+# ============================================
 *.tsbuildinfo
 next-env.d.ts
+
+# ============================================
+# LOCAL WORKING ARTIFACTS (not committed)
+# ============================================
+*.bak
