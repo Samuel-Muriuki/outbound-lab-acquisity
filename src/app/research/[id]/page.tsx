@@ -37,16 +37,38 @@ export default async function ResearchPage({
     notFound();
   }
 
-  const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase
-    .from("research_runs")
-    .select(
-      "id, target_url, target_domain, status, started_at, completed_at, cache_hit"
-    )
-    .eq("id", id)
-    .maybeSingle<ResearchRunRow>();
+  let data: ResearchRunRow | null = null;
+  try {
+    const supabase = getSupabaseAdmin();
+    const result = await supabase
+      .from("research_runs")
+      .select(
+        "id, target_url, target_domain, status, started_at, completed_at, cache_hit"
+      )
+      .eq("id", id)
+      .maybeSingle<ResearchRunRow>();
+    if (result.error) {
+      // Supabase returned an error — log server-side and 404 to the user
+      // rather than leaking the DB error message.
+      console.error(
+        "[research/[id]] Supabase select failed:",
+        result.error.message
+      );
+      notFound();
+    }
+    data = result.data;
+  } catch (err) {
+    // Most likely cause: missing NEXT_PUBLIC_SUPABASE_URL or
+    // SUPABASE_SERVICE_ROLE_KEY in .env.local. Log server-side and 404
+    // gracefully — Next's default 500 page leaks too much.
+    console.error(
+      "[research/[id]] Server config error:",
+      err instanceof Error ? err.message : err
+    );
+    notFound();
+  }
 
-  if (error || !data) {
+  if (!data) {
     notFound();
   }
 

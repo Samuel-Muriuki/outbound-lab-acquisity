@@ -49,7 +49,13 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${GeistSans.variable} ${GeistMono.variable} h-full antialiased`}
+      // 'dark' is hardcoded here so the SSR'd HTML carries the dark
+      // theme on first paint — next-themes hydrates afterward and only
+      // swaps classes when the user explicitly toggles. Eliminates the
+      // white-flash FOUC that's especially visible on error pages
+      // (Next.js's default 404, error.tsx fallbacks) which paint
+      // before next-themes' inline script runs.
+      className={`dark ${GeistSans.variable} ${GeistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
