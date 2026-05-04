@@ -1,5 +1,7 @@
 # OutboundLab
 
+<a href="https://www.buymeacoffee.com/elsamm"><img src="https://img.shields.io/badge/Buy_Me_a_Coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy Me a Coffee" /></a>
+
 > Multi-agent B2B research, on demand. Paste any company URL — get a personalised outreach package in under a minute.
 
 **Live demo:** [outbound-lab.vercel.app](https://outbound-lab.vercel.app) — try the **Run on Acquisity** button.
@@ -140,7 +142,6 @@ If you find this project useful, please consider:
 - ⭐ Starring the repository
 - 🐛 Reporting bugs
 - 💡 Suggesting new features
-- ☕ [Buying me a coffee](https://www.buymeacoffee.com/elsamm)
 
 ## Author
 
@@ -155,3 +156,5 @@ MIT
 ---
 
 Built for the [Acquisity](https://acquisity.com) Senior Full-Stack Engineer (Next.js / AI) application — May 2026.
+
+<a href="https://www.buymeacoffee.com/elsamm"><img src="https://img.shields.io/badge/Buy_Me_a_Coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy Me a Coffee" /></a>
