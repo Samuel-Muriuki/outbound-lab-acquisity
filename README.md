@@ -114,7 +114,9 @@ You'll need free accounts at:
 - [Tavily](https://tavily.com) — search tool, 1k/mo free
 - [Supabase](https://supabase.com) — Postgres + pgvector, free tier, Singapore region recommended
 
-Run the initial schema migration in the Supabase SQL Editor — see `supabase/migrations/0001_initial.sql` once it lands.
+Run the initial schema migrations in the Supabase SQL Editor (or via `supabase db push`):
+- `supabase/migrations/20260502000000_initial.sql` — four tables + RLS + HNSW index
+- `supabase/migrations/20260504000000_index_cache_source_id.sql` — covering index for the FK
 
 ## Tests
 
@@ -126,6 +128,19 @@ pnpm test:e2e        # Playwright against E2E_BASE_URL
 ```
 
 The Playwright spec runs against the production URL by default. Set `E2E_BASE_URL` to override.
+
+Current state: **64 unit tests pass** in ~700 ms (LLM provider chain, both tools, all three agents, orchestrator, forbidden-phrase gate). 1 integration test against `acquisity.com` runs end-to-end on real Groq + Tavily and is auto-skipped without keys.
+
+## Project status
+
+Phase 1 (MVP) is feature-complete on `develop`. Cumulative shape:
+
+- Sessions 1–5 across 23 PRs, all merged with merge commits (no squash, no rebase)
+- 64 unit tests passing (`pnpm test`), 1 integration test gated on API keys
+- Backend: provider abstraction chain (Groq → Gemini → OpenRouter), web_search + web_fetch tools with SSRF guards, three agents with retry / cap / post-validation / forbidden-phrase gates, async-generator orchestrator with cache lookup, SSE route handler
+- Frontend: dark-default brand tokens, Geist Sans + Mono, hero + URL input + "Try it on Acquisity" preset, streaming agent timeline, 4-tab result card with copy-to-clipboard, recent runs preview, branded 404, skip-to-content link, focus management, `/` keyboard shortcut
+
+Phase 2 (cache via vector similarity, Vercel AI SDK migration, regenerate-warmer button) and Phase 3 (tRPC v11, PWA, rate limiting, Sentry) are tracked in [`BUILD-PLAN.md`](./BUILD-PLAN.md).
 
 ## What's intentionally out of scope
 
