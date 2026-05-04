@@ -53,3 +53,40 @@ export const ReconnaissanceOutput = z.object({
 });
 
 export type ReconnaissanceOutputT = z.infer<typeof ReconnaissanceOutput>;
+
+/**
+ * Agent 2 — People & ICP
+ *
+ * Up to 3 decision makers + buyer persona + trigger events.
+ * Post-validated by validateDecisionMakers() in agent-2-people.ts —
+ * each name must appear in its cited source_url or it gets dropped.
+ */
+export const DecisionMaker = z.object({
+  name: z.string().min(2).max(80),
+  role: z.string().min(2).max(120),
+  why_them: z
+    .string()
+    .min(10)
+    .max(280)
+    .describe("≤280 chars: why outbound matters to this person."),
+  source_url: z
+    .string()
+    .url()
+    .describe("Valid URL where you verified the name."),
+  linkedin_url: z.string().url().nullable(),
+});
+export type DecisionMakerT = z.infer<typeof DecisionMaker>;
+
+export const PeopleOutput = z.object({
+  decision_makers: z.array(DecisionMaker).min(0).max(3),
+  buyer_persona: z
+    .string()
+    .min(10)
+    .max(400)
+    .describe("≤400 chars: who would buy this."),
+  trigger_events: z
+    .array(z.string().min(10).max(280))
+    .max(3)
+    .describe("0-3 recent hiring/funding/launch signals worth opening with."),
+});
+export type PeopleOutputT = z.infer<typeof PeopleOutput>;
