@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { ArrowLeft, AlertCircle, Zap } from "lucide-react";
 import {
@@ -44,6 +45,18 @@ export function ResearchView({
     initialError,
   });
 
+  /*
+   * Focus management per .ai/docs/12-ux-flows.md §9.3: after route
+   * transition into the streaming view, programmatic focus moves to
+   * the page's main heading so screen readers announce
+   * "Researching <domain>" without the user having to navigate the
+   * back-link / wordmark header first.
+   */
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, []);
+
   const isCacheHit =
     cacheSourceCompletedAt !== null || stream.cacheSourceRunId !== null;
 
@@ -54,7 +67,10 @@ export function ResearchView({
     (stream.agents[3].durationMs ?? 0);
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-12 sm:px-6 lg:px-8">
+    <main
+      id="main"
+      className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-12 sm:px-6 lg:px-8"
+    >
       <header className="flex items-center justify-between gap-4">
         <Link
           href="/"
@@ -73,7 +89,12 @@ export function ResearchView({
         <p className="text-sm uppercase tracking-wide text-subtle-foreground">
           Researching
         </p>
-        <h1 className="mt-2 text-4xl font-semibold tracking-tight md:text-5xl">
+        <h1
+          ref={headingRef}
+          tabIndex={-1}
+          className="mt-2 text-4xl font-semibold tracking-tight md:text-5xl focus:outline-none"
+        >
+          <span className="sr-only">Researching </span>
           {targetDomain}
         </h1>
         {provider && (

@@ -3,7 +3,11 @@ import { ArrowLeft } from "lucide-react";
 
 export default function NotFound() {
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-start justify-center px-4 py-16 sm:px-6 md:py-24 lg:px-8">
+    <main
+      id="main"
+      tabIndex={-1}
+      className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-start justify-center px-4 py-16 sm:px-6 md:py-24 lg:px-8 focus:outline-none"
+    >
       <p className="text-sm uppercase tracking-wide text-subtle-foreground">
         404
       </p>

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useEffect,
   useId,
   useRef,
   useState,
@@ -44,9 +45,35 @@ export function HeroInput() {
   const inputId = useId();
   const errorId = `${inputId}-error`;
   const formRef = useRef<HTMLFormElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, startSubmit] = useTransition();
+
+  /*
+   * Keyboard shortcut per .ai/docs/12-ux-flows.md §9.1: pressing '/'
+   * anywhere on the landing page focuses the URL input. Skipped when
+   * the user is already typing in an input/textarea/contentEditable
+   * element so pressing '/' inside a search field doesn't steal focus.
+   */
+  useEffect(() => {
+    function handleKeydown(event: KeyboardEvent) {
+      if (event.key !== "/") return;
+      const target = event.target as HTMLElement | null;
+      const tagName = target?.tagName;
+      if (
+        tagName === "INPUT" ||
+        tagName === "TEXTAREA" ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+      event.preventDefault();
+      inputRef.current?.focus();
+    }
+    document.addEventListener("keydown", handleKeydown);
+    return () => document.removeEventListener("keydown", handleKeydown);
+  }, []);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -116,6 +143,7 @@ export function HeroInput() {
             Company URL to research
           </label>
           <Input
+            ref={inputRef}
             id={inputId}
             name="url"
             type="url"
