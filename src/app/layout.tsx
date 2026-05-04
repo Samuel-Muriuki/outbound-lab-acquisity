@@ -60,6 +60,19 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
+        {/*
+          Skip-to-content link per .ai/docs/12-ux-flows.md §9.1.
+          Visible only when keyboard-focused (the focus-visible pseudo
+          handles that automatically). Targets the [tabindex=-1] main
+          element on each page so screen-reader and keyboard-only users
+          can bypass the back-link / wordmark header.
+        */}
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-foreground focus:px-3 focus:py-1.5 focus:text-sm focus:font-medium focus:text-background focus:shadow"
+        >
+          Skip to content
+        </a>
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"
