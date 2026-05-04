@@ -1,0 +1,26 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="og-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#09090B"/>
+      <stop offset="100%" stop-color="#18181B"/>
+    </linearGradient>
+    <linearGradient id="og-grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#22D3EE"/>
+      <stop offset="100%" stop-color="#3B82F6"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#og-bg)"/>
+  <circle cx="120" cy="120" r="36" fill="url(#og-grad)"/>
+  <text x="180" y="135" font-family="Geist, Inter, sans-serif" font-size="44" font-weight="500" letter-spacing="-0.02em" fill="#FAFAFA">
+    OutboundLab
+  </text>
+  <text x="120" y="320" font-family="Geist, Inter, sans-serif" font-size="80" font-weight="600" letter-spacing="-0.025em" fill="#FAFAFA">
+    Multi-agent B2B research,
+  </text>
+  <text x="120" y="410" font-family="Geist, Inter, sans-serif" font-size="80" font-weight="600" letter-spacing="-0.025em" fill="url(#og-grad)">
+    on demand.
+  </text>
+  <text x="120" y="540" font-family="Geist, Inter, sans-serif" font-size="28" font-weight="400" fill="#A1A1AA">
+    outbound-lab.vercel.app  ·  Built by Samuel Muriuki
+  </text>
+</svg>
