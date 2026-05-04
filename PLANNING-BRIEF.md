@@ -189,7 +189,7 @@ After agents finish:
 |---|---|---|
 | **Framework** | Next.js 15 App Router | Acquisity's stack. Server Components reduce hydration cost on streaming UI. |
 | **Language** | TypeScript strict | Acquisity's stack. Strict mode catches the kinds of contract bugs that killed my Crossover assessment. |
-| **API layer (Phase 1-2)** | Next.js Server Actions | Faster to ship in 8 hours; tRPC migration in Phase 3 demonstrates planned evolution. |
+| **API layer (Phase 1-2)** | Route handlers + native SSE | Server Actions can't natively stream SSE; route handlers ship fast and give clean control over the event taxonomy in §5.3. tRPC migration in Phase 3 demonstrates planned evolution. |
 | **API layer (Phase 3)** | tRPC v11 | Acquisity's stack. End-to-end type safety; eliminates the API-contract drift class of bugs. |
 | **Styling** | Tailwind + shadcn/ui | Acquisity's stack. shadcn over a heavier component library — own the component code. |
 | **Theme** | Dark by default, light toggle | Matches Acquisity's product UI tone. Modern. |
@@ -553,7 +553,7 @@ async function* runResearch(targetUrl: string): AsyncIterable<StreamEvent> {
 }
 ```
 
-(Note: Server Actions don't natively support `AsyncIterable` — we use Vercel's `experimental_streamData` or upgrade to a route handler with native SSE. Decided in Phase 1.)
+(Implementation note: the orchestrator runs inside a `POST` route handler at `/api/research/[id]/stream` that returns a `ReadableStream` with `Content-Type: text/event-stream`. Server Actions can't natively stream SSE, which is why route handlers are the locked Phase 1 choice — see §5.1.)
 
 ---
 
