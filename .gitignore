@@ -1,82 +1,41 @@
-# ============================================
-# DEPENDENCIES
-# ============================================
-node_modules/
-.pnp
-.pnp.js
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# ============================================
-# BUILD ARTIFACTS
-# ============================================
-.next/
-dist/
-build/
-out/
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
 
-# ============================================
-# ENVIRONMENT FILES — NEVER COMMIT SECRETS
-# ============================================
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-.env*.local
-# .env.example is intentionally NOT gitignored — commit it
+# testing
+/coverage
 
-# ============================================
-# AI AGENT FOLDERS — ALWAYS GITIGNORE
-# ============================================
-.ai/
-.claude/
+# next.js
+/.next/
+/out/
 
-# ============================================
-# TEST FILES CONTAINING CREDENTIALS
-# ============================================
-tests/fixtures/credentials/
-tests/fixtures/*.env
+# production
+/build
 
-# ============================================
-# TESTING ARTIFACTS
-# ============================================
-coverage/
-playwright-report/
-test-results/
-.nyc_output/
-
-# ============================================
-# IDE & EDITOR
-# ============================================
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# ============================================
-# OS FILES
-# ============================================
+# misc
 .DS_Store
-.DS_Store?
-._*
-Thumbs.db
-ehthumbs.db
-Desktop.ini
+*.pem
 
-# ============================================
-# LOGS
-# ============================================
-*.log
+# debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
+.pnpm-debug.log*
 
-# ============================================
-# MISC
-# ============================================
-*.pem
+# env files (can opt-in for committing if needed)
+.env*
+
+# vercel
 .vercel
-.turbo
+
+# typescript
 *.tsbuildinfo
 next-env.d.ts
