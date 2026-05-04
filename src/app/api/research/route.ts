@@ -3,6 +3,8 @@ import {
   ResearchInput,
   normaliseDomain,
 } from "@/lib/validation/research-input";
+import { BLOCKED_MESSAGE } from "@/lib/validation/profanity";
+import { isFamilyDnsBlocked } from "@/lib/validation/family-dns";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -57,6 +59,20 @@ export async function POST(request: NextRequest) {
 
   const { url } = parsed.data;
   const target_domain = normaliseDomain(url);
+
+  // Cloudflare Family DNS gate — catches NSFW brand domains (onlyfans,
+  // chaturbate, etc.) that the sync profanity refine in `ResearchInput`
+  // can't see. Fails open on timeout / DNS error so a Cloudflare blip
+  // never blocks a legitimate user.
+  if (await isFamilyDnsBlocked(target_domain)) {
+    return NextResponse.json(
+      {
+        error: "Invalid input.",
+        issues: [{ path: "url", message: BLOCKED_MESSAGE }],
+      },
+      { status: 400 }
+    );
+  }
 
   let supabase;
   try {
