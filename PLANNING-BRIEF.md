@@ -5,7 +5,7 @@
 **Status:** Awaiting approval before build starts
 **Target:** Acquisity application (Sr Full-Stack Engineer — Next.js / AI)
 **Live target URL:** `outbound-lab.vercel.app`
-**Repo:** `github.com/Samuel-Muriuki/outbound-lab` (public)
+**Repo:** `github.com/Samuel-Muriuki/outbound-lab-acquisity` (public)
 
 ---
 
