@@ -99,7 +99,9 @@ async function runOnce(
         tools: TOOLS,
         temperature: 0.2,
         maxTokens: 2_048,
-        responseFormat: "json",
+        // No responseFormat: "json" — Groq rejects JSON mode + tools in
+        // the same request. The system prompt instructs JSON-only output
+        // and extractJSON() handles any markdown-fence slips.
       },
       (provider) => emit({ type: "provider_used", agent: 1, provider })
     );
