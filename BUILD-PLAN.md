@@ -10,14 +10,20 @@ This is the file you open in Claude Code each day. Each section is a self-contai
 
 Before any code:
 
-1. **Sign up for accounts** (all free):
-   - Anthropic console → get API key, set $20 budget alert
-   - Tavily (https://tavily.com) → get API key
-   - OpenAI → get API key, set $5 budget alert
-   - Supabase → create project in **Singapore** region, get URL + anon key + service-role key
-   - Vercel → connect to GitHub
+1. **Sign up for accounts** (all free — no payment method required):
+   - Groq (https://console.groq.com) → primary LLM, 14,400 req/day free
+   - Google AI Studio (https://aistudio.google.com/app/apikey) → Gemini fallback + embeddings, 1,500 req/day free
+   - OpenRouter (https://openrouter.ai) → last-resort fallback, ~50 req/day free
+   - Tavily (https://tavily.com) → search tool, 1k/mo free
+   - Supabase (https://supabase.com) → create project in **Singapore** region, get URL + anon key + service-role key
+   - GitHub → ensure `gh` is logged in (`gh auth status`)
+   - Vercel → connect to GitHub (deferred until end of Session 1)
    - Sentry (defer to Phase 3)
    - Upstash (defer to Phase 3)
+
+   At least one of GROQ_API_KEY / GEMINI_API_KEY / OPENROUTER_API_KEY must be
+   set; all three is recommended for resilience. No paid LLM provider — that's
+   part of the demo's value proposition.
 
 2. **Run the bootstrap script** from repo root:
    ```bash
@@ -53,7 +59,7 @@ PR 1: 🔧 build(scaffold): Next.js 15 + TypeScript strict + Tailwind + shadcn/u
 - Initialize Next.js 15 with App Router, TypeScript strict, Tailwind
 - Install shadcn/ui (theme: zinc, dark default)
 - Add: Button, Input, Card, Badge, Tooltip, Dialog primitives
-- Verify `npm run dev` shows a working shadcn Button
+- Verify `pnpm dev` shows a working shadcn Button
 
 PR 2: 📝 docs(env): complete .env.example with all required keys
 - Match the schema in PLANNING-BRIEF.md section 5.1
@@ -144,7 +150,7 @@ PR 11: ✨ feat(agents): Reconnaissance agent with tool-use loop
 - /src/lib/agents/prompts/reconnaissance.ts (prompts as constants)
 - /src/lib/agents/schemas.ts (Zod ReconnaissanceOutput)
 - Use exact code from section 4.5
-- Unit test: mock Anthropic, verify Zod validation works
+- Unit test: mock the chat() provider layer, verify Zod validation works on agent output
 
 PR 12: 🧪 test(agents): integration test for Agent 1 against acquisity.com
 - /tests/integration/agent-1.test.ts
@@ -237,7 +243,7 @@ After PR 20: production end-to-end test. Submit acquisity.com, watch the agents 
 
 Before starting Phase 2:
 
-1. Run Playwright spec on production: `npm run test:e2e -- --grep "@phase1"`
+1. Run Playwright spec on production: `pnpm test:e2e -- --grep "@phase1"`
 2. Manual checklist (PLANNING-BRIEF section 11):
    - [ ] Loads in <2.5s on mobile (real device, not laptop)
    - [ ] Works on first try in incognito
@@ -259,7 +265,7 @@ If all green: send LinkedIn message to Tasnim with the live link. Phase 2 starts
 **Prompt:**
 
 ```
-SESSION 6: Migrate from OpenAI SDK (Groq compatible) + Gemini SDK to Vercel AI SDK. Acquisity's job description explicitly lists Vercel AI SDK — this is a high-value signal.
+SESSION 6: Migrate from raw provider SDKs (openai for Groq + OpenRouter, @google/generative-ai for Gemini) to Vercel AI SDK. Acquisity's job description explicitly lists Vercel AI SDK — this is a high-value signal. The provider chain order (Groq → Gemini → OpenRouter) is preserved through Vercel AI SDK's `@ai-sdk/*` providers.
 
 Files to read:
 - .ai/docs/06-agent-system-design.md section 10 (migration plan)
@@ -267,8 +273,9 @@ Files to read:
 One agent per PR (3 PRs total):
 
 PR 21: ♻️ refactor(agents): migrate Agent 1 to Vercel AI SDK
-- Replace OpenAI SDK (Groq compatible) + Gemini SDK calls with `streamText` + `tool` from `ai`
-- Use `@ai-sdk/anthropic` provider
+- Replace raw `openai` + `@google/generative-ai` calls with `streamText` + `tool` from `ai`
+- Use `@ai-sdk/groq` (primary), `@ai-sdk/google` (fallback), `@ai-sdk/openrouter` (last resort)
+- Provider order locked: Groq → Gemini → OpenRouter
 - Schemas and prompts unchanged
 - Existing tests should still pass
 
