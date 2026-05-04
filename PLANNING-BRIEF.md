@@ -591,7 +591,7 @@ This must be free or near-free. The whole project should run on free tiers.
 | Task | Acceptance criterion | Commit |
 |---|---|---|
 | Bootstrap repo | `bootstrap.sh` runs, repo on GitHub, Vercel deploys empty page | 🎉 chore: initial project setup |
-| Next.js 15 + TypeScript strict + Tailwind + shadcn install | `npm run dev` shows shadcn button | 🔧 build: scaffold Next.js 15 + Tailwind + shadcn/ui |
+| Next.js (App Router) + TypeScript strict + Tailwind + shadcn install | `pnpm dev` shows shadcn button | 🔧 build: scaffold Next.js + Tailwind + shadcn/ui |
 | Supabase project + schema migration | Tables created, RLS enabled | 🗃️ db: add research_runs, research_messages, research_embeddings |
 | `.env.example` populated | Every secret documented with comment | 📝 docs: complete .env.example |
 | Landing page UI | Loads in <2s, hero CTA visible | ✨ feat(landing): hero with URL input and Run-on-Acquisity CTA |
@@ -605,7 +605,7 @@ This must be free or near-free. The whole project should run on free tiers.
 | Streaming UI | Shows progress as agents run | ✨ feat(streaming): server-sent events for agent progress |
 | Results card UI | Renders the final JSON cleanly | ✨ feat(results): research result card with sources and email |
 | Error states | "Couldn't reach that URL" graceful handling | 🐛 fix(api): graceful error handling for invalid URLs |
-| One Playwright E2E test | `npm run test:e2e` passes against production URL | 🧪 test(e2e): full research flow on production |
+| One Playwright E2E test | `pnpm test:e2e` passes against production URL | 🧪 test(e2e): full research flow on production |
 | Vercel deploy + custom subdomain | Live at outbound-lab.vercel.app | 🚀 deploy: production Vercel configuration |
 | README v1 | What / why / stack / how to run / decision log | 📝 docs: README v1 with decision log |
 
