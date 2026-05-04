@@ -7,6 +7,7 @@ import {
   type UseResearchStreamArgs,
 } from "@/hooks/use-research-stream";
 import { AgentTimeline } from "./agent-timeline";
+import { ResultCard } from "./result-card";
 
 export interface ResearchViewProps {
   runId: string;
@@ -133,29 +134,8 @@ export function ResearchView({
       )}
 
       {stream.status === "done" && stream.result && (
-        <section className="mt-10 rounded-xl border border-border bg-surface-1 p-5">
-          <header className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm uppercase tracking-wide text-subtle-foreground">
-                Result
-              </p>
-              <h2 className="mt-1 text-2xl font-semibold tracking-tight">
-                {stream.result.recon?.company_name ?? targetDomain}
-              </h2>
-              {stream.result.recon?.one_liner && (
-                <p className="mt-1 text-base text-muted-foreground">
-                  {stream.result.recon.one_liner}
-                </p>
-              )}
-            </div>
-          </header>
-          <p className="mt-6 text-sm text-muted-foreground">
-            The full result card with Brief / People / Email / Sources tabs lands
-            in PR O. For now, here&apos;s the raw payload:
-          </p>
-          <pre className="mt-4 overflow-x-auto rounded-md border border-border bg-surface-2 p-4 font-mono text-xs">
-            {JSON.stringify(stream.result, null, 2)}
-          </pre>
+        <section className="mt-10">
+          <ResultCard result={stream.result} />
         </section>
       )}
     </main>
