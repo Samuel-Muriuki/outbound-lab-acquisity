@@ -1,0 +1,82 @@
+# ============================================
+# DEPENDENCIES
+# ============================================
+node_modules/
+.pnp
+.pnp.js
+
+# ============================================
+# BUILD ARTIFACTS
+# ============================================
+.next/
+dist/
+build/
+out/
+
+# ============================================
+# ENVIRONMENT FILES — NEVER COMMIT SECRETS
+# ============================================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env*.local
+# .env.example is intentionally NOT gitignored — commit it
+
+# ============================================
+# AI AGENT FOLDERS — ALWAYS GITIGNORE
+# ============================================
+.ai/
+.claude/
+
+# ============================================
+# TEST FILES CONTAINING CREDENTIALS
+# ============================================
+tests/fixtures/credentials/
+tests/fixtures/*.env
+
+# ============================================
+# TESTING ARTIFACTS
+# ============================================
+coverage/
+playwright-report/
+test-results/
+.nyc_output/
+
+# ============================================
+# IDE & EDITOR
+# ============================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ============================================
+# OS FILES
+# ============================================
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ============================================
+# LOGS
+# ============================================
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ============================================
+# MISC
+# ============================================
+*.pem
+.vercel
+.turbo
+*.tsbuildinfo
+next-env.d.ts
