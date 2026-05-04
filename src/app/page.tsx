@@ -1,4 +1,8 @@
+import { Suspense } from "react";
 import { HeroInput } from "@/components/hero-input";
+import { RecentRunsPreview } from "@/components/landing/recent-runs-preview";
+
+export const dynamic = "force-dynamic";
 
 export default function HomePage() {
   return (
@@ -29,6 +33,10 @@ export default function HomePage() {
           <HeroInput />
         </div>
       </section>
+
+      <Suspense fallback={null}>
+        <RecentRunsPreview />
+      </Suspense>
     </main>
   );
 }
