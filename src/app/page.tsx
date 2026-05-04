@@ -1,17 +1,34 @@
-import { Button } from "@/components/ui/button";
+import { HeroInput } from "@/components/hero-input";
 
-export default function Home() {
+export default function HomePage() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-8 px-6">
-      <div className="flex items-center gap-3">
-        <span className="size-3 rounded-full gradient-bg" aria-hidden />
-        <h1 className="text-3xl font-semibold tracking-tight">OutboundLab</h1>
-      </div>
-      <p className="max-w-md text-center text-sm text-muted-foreground">
-        Scaffold ready · brand tokens loaded · the real landing page lands in
-        Session 2.
-      </p>
-      <Button>shadcn primitive smoke test</Button>
+    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-16 sm:px-6 md:py-24 lg:px-8">
+      <header className="flex items-center gap-3">
+        <span
+          className="size-3 rounded-full gradient-bg"
+          aria-hidden
+        />
+        <span className="text-base font-medium tracking-tight">
+          OutboundLab
+        </span>
+      </header>
+
+      <section className="mt-16 md:mt-24">
+        <h1 className="text-5xl font-semibold tracking-[-0.025em] md:text-6xl">
+          OutboundLab
+        </h1>
+        <p className="mt-4 text-lg text-muted-foreground md:text-xl">
+          Multi-agent B2B research, on demand.
+        </p>
+        <p className="mt-6 max-w-prose text-base text-muted-foreground">
+          Paste any company URL. Get a personalised outreach package in
+          under a minute — researched by AI, not templated.
+        </p>
+
+        <div className="mt-10">
+          <HeroInput />
+        </div>
+      </section>
     </main>
   );
 }
