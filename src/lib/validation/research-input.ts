@@ -19,7 +19,7 @@ const PRIVATE_HOSTNAMES = new Set([
 
 const PRIVATE_IPV4_PREFIXES = ["10.", "192.168.", "169.254."];
 
-function isPrivateHostname(hostname: string): boolean {
+export function isPrivateHostname(hostname: string): boolean {
   const h = hostname.toLowerCase();
   if (PRIVATE_HOSTNAMES.has(h)) return true;
   if (PRIVATE_IPV4_PREFIXES.some((p) => h.startsWith(p))) return true;
