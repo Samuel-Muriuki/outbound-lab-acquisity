@@ -1,36 +1,157 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# OutboundLab
 
-## Getting Started
+> Multi-agent B2B research, on demand. Paste any company URL — get a personalised outreach package in under a minute.
 
-First, run the development server:
+**Live demo:** [outbound-lab.vercel.app](https://outbound-lab.vercel.app) — try the **Run on Acquisity** button.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+---
+
+## What it does
+
+OutboundLab takes any company URL and runs a three-agent pipeline:
+
+1. **Reconnaissance** — figures out what the company does, who they sell to, recent signals
+2. **People & ICP** — identifies up to 3 likely decision makers with verified sources
+3. **Personalisation & Outreach** — drafts a cold email opening with a specific observation, plus 5 alternate hooks for variation
+
+The agent reasoning streams to the UI in real time — tool calls, intermediate outputs, and final structured JSON, like watching Cursor's agent panel work.
+
+## Why this exists
+
+Built as a public technical artifact. The goal was to ship something useful end-to-end on a specific stack — Next.js (App Router) + TypeScript strict + Tailwind + shadcn/ui + Postgres + pgvector + Vercel — in a few days, with the README as a decision log rather than a sales page.
+
+## Stack
+
+Fully free-tier — **$0/month**, resilient by design.
+
+| Layer | Choice | Why |
+|---|---|---|
+| Framework | **Next.js** (App Router, RSC by default) | Server Components keep the streaming UI lean |
+| Language | **TypeScript strict** | Catches contract drift between agents |
+| API | Route handlers + native SSE (Phase 1) → tRPC v11 (Phase 3) | Ship fast, migrate when the type-safety pays off |
+| LLM (primary) | **Groq** `llama-3.3-70b-versatile` | Fastest inference (~500 tok/s); native function calling |
+| LLM (fallback) | **Google Gemini 2.5 Flash** | Different infra; 1,500 req/day free |
+| LLM (last resort) | **OpenRouter** free Llama | Routes to whichever free host is up |
+| Orchestration | Vercel AI SDK (Phase 2+) | Cleanest streaming-tool-call protocol in Next.js |
+| Embeddings | **Gemini `text-embedding-004`** | Free, 768d, sufficient for cache lookup |
+| Search | **Tavily Search API** | Built for LLM agents; 1k/mo free |
+| Database | **Supabase** Postgres + pgvector | One DB, transactional writes alongside cache |
+| Hosting | **Vercel** Hobby | Edge functions for streaming routes |
+| UI | Tailwind v4, shadcn/ui (zinc, dark default), Geist Sans + Mono | |
+
+**Architectural decision:** the LLM provider chain is abstracted behind a single `chat()` function. Agents don't know which provider served them — fallback is invisible at the agent layer. The same pattern would work in production with paid tiers as the primary; the abstraction is provider-agnostic.
+
+## Architecture
+
+```
+USER (browser)
+  ↓
+NEXT.JS (Vercel)
+  ↓
+ORCHESTRATOR (async generator, server-side)
+  ├── Cache check → Postgres + pgvector (7-day exact match)
+  ├── Agent 1 — Reconnaissance (tools: web_search, web_fetch)
+  ├── Agent 2 — People & ICP (tools: web_search)
+  └── Agent 3 — Personalisation (no tools — pure reasoning)
+  ↓
+SSE stream of events → client UI
+  ↓
+Persist final result + embedding for future cache hits
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Detailed design lives in [`PLANNING-BRIEF.md`](./PLANNING-BRIEF.md) at the repo root.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Decision log
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Non-obvious calls worth surfacing:
 
-## Learn More
+**Why three separate agents instead of one big prompt with role separation?**
+Each agent has a different optimal temperature and a different optimal toolset. Agent 3 has zero tools — it's pure reasoning over prior outputs. Splitting them lets each agent be tuned independently and produces tighter outputs at the cost of ~30% more tokens.
 
-To learn more about Next.js, take a look at the following resources:
+**Why a free-tier provider chain (Groq → Gemini → OpenRouter)?**
+Demonstrates production-engineering thinking (graceful degradation, multi-provider abstraction, no single point of failure) without a paid API anywhere. Groq leads because ~500 tok/s makes the streaming UI feel instant. Gemini handles Groq rate-limits without missing a beat (different infra). OpenRouter routes to whatever free Llama host is up if both upstream providers are degraded.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+**Why route handlers + native SSE for Phase 1 (then tRPC v11 in Phase 3)?**
+Server Actions can't natively stream SSE, and route handlers ship fast. tRPC's value (end-to-end types) doesn't pay off until the surface area justifies it; the migration is a few PRs, schemas unchanged.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+**Why pgvector instead of a managed vector DB (Pinecone, Weaviate)?**
+Same Postgres I'm already running. One connection pool, transactional writes alongside business data. HNSW with cosine distance is fine at this scale (well under a million rows).
 
-## Deploy on Vercel
+**Why Tavily over SerpAPI / Brave Search?**
+Built for LLM agents — returns cleaned markdown with snippets, not raw HTML. Free tier is 1,000 searches/month, more than enough for a demo.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+**Why a 7-day exact-domain cache instead of always-fresh?**
+The "Run on Acquisity" CTA needs to be near-instant after the first run. Vector similarity (Phase 2) handles typos and similar domains. Stale data after 7 days falls through to a fresh run.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+**Why server-side validation gates between agents?**
+Agent 2 outputs are post-validated — each decision-maker name must appear in the cited source URL or it's dropped. No hallucinated people reach the email. Agent 3 output is regex-checked for forbidden phrases ("hope this email finds you well", "amazing", "game-changing") and retried if violated.
+
+**Why dark mode by default?**
+The audience uses agent products (Cursor, Linear, Vercel) that default dark. Light mode is a toggle, not a fight.
+
+## Run locally
+
+```bash
+git clone git@github.com:Samuel-Muriuki/outbound-lab-acquisity.git
+cd outbound-lab-acquisity
+bash bootstrap.sh
+
+# Fill in real keys
+cp .env.example .env.local
+# edit .env.local
+
+pnpm dev
+# Open http://localhost:3000
+```
+
+You'll need free accounts at:
+
+- [Groq](https://console.groq.com) — primary LLM, 14,400 req/day free
+- [Google AI Studio](https://aistudio.google.com/app/apikey) — Gemini fallback + embeddings
+- [OpenRouter](https://openrouter.ai) — last-resort fallback
+- [Tavily](https://tavily.com) — search tool, 1k/mo free
+- [Supabase](https://supabase.com) — Postgres + pgvector, free tier, Singapore region recommended
+
+Run the initial schema migration in the Supabase SQL Editor — see `supabase/migrations/0001_initial.sql` once it lands.
+
+## Tests
+
+```bash
+pnpm typecheck       # tsc --noEmit
+pnpm lint            # ESLint
+pnpm test            # Vitest unit + integration (mocked)
+pnpm test:e2e        # Playwright against E2E_BASE_URL
+```
+
+The Playwright spec runs against the production URL by default. Set `E2E_BASE_URL` to override.
+
+## What's intentionally out of scope
+
+- Bulk research (one URL at a time — keep the demo simple)
+- Email sending (drafts only — sending is the user's responsibility)
+- Multi-language (English only)
+- Authentication (Phase 3 adds optional magic-link)
+- Mobile native app (web PWA only)
+
+## 💖 Support
+
+If you find this project useful, please consider:
+
+- ⭐ Starring the repository
+- 🐛 Reporting bugs
+- 💡 Suggesting new features
+- ☕ [Buying me a coffee](https://www.buymeacoffee.com/elsamm)
+
+## Author
+
+[Samuel Muriuki](https://github.com/Samuel-Muriuki) · [samuel-muriuki.vercel.app](https://samuel-muriuki.vercel.app) · [LinkedIn](https://linkedin.com/in/El-Samm)
+
+Built in Nairobi.
+
+## License
+
+MIT
+
+---
+
+Built for the [Acquisity](https://acquisity.com) Senior Full-Stack Engineer (Next.js / AI) application — May 2026.
