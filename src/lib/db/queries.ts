@@ -59,6 +59,69 @@ export async function findCachedRun(
   return data ?? null;
 }
 
+export interface RecentRunRow {
+  id: string;
+  target_domain: string;
+  one_liner: string;
+  duration_ms: number | null;
+  decision_maker_count: number;
+  completed_at: string;
+}
+
+/**
+ * The N most-recent successful runs (status='done' OR 'degraded') for the
+ * landing-page preview. Uses RLS public_read on research_runs but keeps
+ * the service-role client for free since we already have it wired.
+ *
+ * Reads `result` to extract the recon.one_liner and the
+ * people.decision_makers length without a separate join — these live in
+ * the run row's JSONB payload.
+ *
+ * Returns an empty array on any error (best-effort — recent runs are a
+ * nice-to-have, never block the landing page).
+ */
+export async function getRecentRuns(limit: number): Promise<RecentRunRow[]> {
+  let supabase;
+  try {
+    supabase = getSupabaseAdmin();
+  } catch {
+    // Missing env config in local dev — silently return empty.
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from("research_runs")
+    .select("id, target_domain, result, duration_ms, completed_at")
+    .in("status", ["done", "degraded"])
+    .not("result", "is", null)
+    .order("completed_at", { ascending: false })
+    .limit(limit);
+
+  if (error || !data) {
+    if (error) {
+      console.warn("[getRecentRuns] Supabase error:", error.message);
+    }
+    return [];
+  }
+
+  return data.map((row): RecentRunRow => {
+    const result = row.result as
+      | {
+          recon?: { one_liner?: string };
+          people?: { decision_makers?: unknown[] };
+        }
+      | null;
+    return {
+      id: row.id as string,
+      target_domain: row.target_domain as string,
+      one_liner: result?.recon?.one_liner ?? "",
+      duration_ms: (row.duration_ms as number | null) ?? null,
+      decision_maker_count: result?.people?.decision_makers?.length ?? 0,
+      completed_at: row.completed_at as string,
+    };
+  });
+}
+
 /** Move a pending row into running status when the orchestrator starts work. */
 export async function markRunRunning(runId: string): Promise<void> {
   const supabase = getSupabaseAdmin();
