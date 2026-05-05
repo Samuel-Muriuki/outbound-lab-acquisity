@@ -6,6 +6,7 @@ import { DeleteRunButton } from "@/components/delete-run-button";
 import { DotFieldBackground } from "@/components/backgrounds/dot-field-background";
 import { RunsSearch } from "@/components/runs/runs-search";
 import { TiltedWrapper } from "@/components/tilted-wrapper";
+import { HoverElectricBorder } from "@/components/hover-electric-border";
 
 export const dynamic = "force-dynamic";
 
@@ -75,42 +76,48 @@ export default async function RunsPage({ searchParams }: RunsPageProps) {
               run.creator_session_id !== null &&
               visitorSessionId === run.creator_session_id;
             return (
-              <li key={run.id} className="relative">
-                <TiltedWrapper innerClassName="h-full">
-                  <Link
-                    href={`/research/${run.id}`}
-                    className="group block h-full rounded-lg border border-border bg-surface-1 p-4 transition-colors duration-200 [transition-timing-function:var(--ease-out)] hover:border-brand-secondary hover:bg-surface-2"
-                  >
-                    <p className="font-medium tracking-tight text-foreground">
-                      {run.target_domain}
-                    </p>
-                    {run.one_liner && (
-                      <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
-                        {run.one_liner}
+              <li key={run.id} className="relative h-full">
+                <HoverElectricBorder borderRadius={12}>
+                  <TiltedWrapper innerClassName="h-full">
+                    <Link
+                      href={`/research/${run.id}`}
+                      className="group flex h-full min-h-[180px] flex-col rounded-lg border border-border bg-surface-1 p-4 transition-colors duration-200 [transition-timing-function:var(--ease-out)] hover:border-transparent hover:bg-surface-2"
+                    >
+                      <p className="font-medium tracking-tight text-foreground">
+                        {run.target_domain}
                       </p>
-                    )}
-                    <hr className="my-3 border-border/60" />
-                    <p className="font-mono text-xs tabular-nums text-subtle-foreground">
-                      {run.decision_maker_count > 0 && (
-                        <>
-                          {run.decision_maker_count}{" "}
-                          {run.decision_maker_count === 1 ? "maker" : "makers"}
-                        </>
+                      {run.one_liner && (
+                        <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                          {run.one_liner}
+                        </p>
                       )}
-                      {run.decision_maker_count > 0 && run.duration_ms !== null && " · "}
-                      {run.duration_ms !== null && (
-                        <>{(run.duration_ms / 1000).toFixed(1)}s</>
-                      )}
-                    </p>
-                  </Link>
-                </TiltedWrapper>
-                {isOwner && (
-                  <DeleteRunButton
-                    runId={run.id}
-                    variant="icon-only"
-                    className="absolute right-2 top-2 z-10"
-                  />
-                )}
+                      <hr className="my-3 border-border/60" />
+                      <p className="mt-auto font-mono text-xs tabular-nums text-subtle-foreground">
+                        {run.decision_maker_count > 0 && (
+                          <>
+                            {run.decision_maker_count}{" "}
+                            {run.decision_maker_count === 1 ? "maker" : "makers"}
+                          </>
+                        )}
+                        {run.decision_maker_count > 0 && run.duration_ms !== null && " · "}
+                        {run.duration_ms !== null && (
+                          <>{(run.duration_ms / 1000).toFixed(1)}s</>
+                        )}
+                      </p>
+                    </Link>
+                  </TiltedWrapper>
+                  {/* DeleteRunButton inside HoverElectricBorder so the
+                    * mouseleave doesn't fire when the cursor moves
+                    * onto the trash icon. z-20 keeps it above the
+                    * canvas overlay (z-2). */}
+                  {isOwner && (
+                    <DeleteRunButton
+                      runId={run.id}
+                      variant="icon-only"
+                      className="absolute right-2 top-2 z-20"
+                    />
+                  )}
+                </HoverElectricBorder>
               </li>
             );
           })}

@@ -327,6 +327,9 @@
   }
 }
 
+/* electric-border: inline Tailwind in src/components/electric-border.tsx,
+ * no shared CSS classes needed. */
+
 /* ============================================
  * Interactive background — spotlight variant
  * ============================================
