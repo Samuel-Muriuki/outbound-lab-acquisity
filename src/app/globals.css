@@ -331,6 +331,18 @@
  * no shared CSS classes needed. */
 
 /* ============================================
+ * RunsSearch input — hide the native HTML5
+ * type="search" clear-button so only our
+ * lucide X button shows. WebKit/Blink only;
+ * Firefox doesn't render the native button.
+ * ============================================ */
+.runs-search-input::-webkit-search-cancel-button,
+.runs-search-input::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* ============================================
  * Interactive background — spotlight variant
  * ============================================
  * Cursor-following radial gradient + click ripples. Driven by
