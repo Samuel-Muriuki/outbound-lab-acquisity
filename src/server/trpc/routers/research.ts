@@ -18,6 +18,7 @@ import {
 } from "@/lib/db/queries";
 import { runResearch, type ResearchResult } from "@/lib/agents/orchestrator";
 import { runAgent3 } from "@/lib/agents/agent-3-email";
+import { SCHEMA_VERSION } from "@/lib/agents/schema-version";
 import type { AgentIndex, StreamEvent } from "@/lib/agents/stream-events";
 
 const RunIdInput = z.object({
@@ -82,6 +83,7 @@ export const researchRouter = router({
           creator_session_id: sessionId,
           tone,
           channel,
+          schema_version: SCHEMA_VERSION,
         })
         .select("id")
         .single();

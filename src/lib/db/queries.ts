@@ -1,5 +1,6 @@
 import "server-only";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
+import { SCHEMA_VERSION } from "@/lib/agents/schema-version";
 
 /**
  * DB query layer for the orchestrator + per-agent message log.
@@ -46,6 +47,7 @@ export async function findCachedRun(
     .select("id, target_url, target_domain, result, completed_at")
     .eq("target_domain", domain)
     .eq("status", "done")
+    .eq("schema_version", SCHEMA_VERSION)
     .not("result", "is", null)
     .gte("completed_at", cutoff)
     .order("completed_at", { ascending: false })
