@@ -1,5 +1,5 @@
 const PORTFOLIO_URL = "https://samuel-muriuki.vercel.app/";
-const GITHUB_URL = "https://github.com/Samuel-Muriuki/outbound-lab-acquisity";
+const GITHUB_URL = "https://github.com/Samuel-Muriuki/OutBound-Lab-Acquisity";
 
 /**
  * GitHub's official mark (single-path silhouette). Inlined rather than
