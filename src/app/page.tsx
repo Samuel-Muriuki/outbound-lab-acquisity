@@ -25,7 +25,7 @@ export default function HomePage() {
       </header>
 
       <section className="mt-16 md:mt-24">
-        <h1 className="text-5xl font-semibold tracking-[-0.025em] md:text-6xl">
+        <h1 className="shimmer-text text-5xl font-semibold tracking-[-0.025em] md:text-6xl">
           OutboundLab
         </h1>
         <p className="mt-4 text-lg text-muted-foreground md:text-xl">
