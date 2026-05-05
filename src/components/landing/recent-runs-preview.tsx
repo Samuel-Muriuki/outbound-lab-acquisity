@@ -29,12 +29,20 @@ export async function RecentRunsPreview() {
 
   return (
     <section className="mt-16 md:mt-24" aria-labelledby="recent-runs-heading">
-      <h2
-        id="recent-runs-heading"
-        className="text-xs uppercase tracking-[0.2em] text-subtle-foreground"
-      >
-        — Recent runs
-      </h2>
+      <div className="flex items-baseline justify-between gap-4">
+        <h2
+          id="recent-runs-heading"
+          className="text-xs uppercase tracking-[0.2em] text-subtle-foreground"
+        >
+          — Recent runs
+        </h2>
+        <Link
+          href="/runs"
+          className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+        >
+          See all →
+        </Link>
+      </div>
       <ul className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 list-none p-0">
         {runs.map((run) => {
           const isOwner =

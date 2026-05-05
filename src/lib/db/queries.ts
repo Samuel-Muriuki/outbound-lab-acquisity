@@ -127,6 +127,102 @@ export async function getRecentRuns(limit: number): Promise<RecentRunRow[]> {
   });
 }
 
+export interface SearchRunsArgs {
+  /** Free-text query — matches target_domain or recon.company_name (case-insensitive substring). */
+  query?: string;
+  /** Page size, capped at 50 server-side regardless of input. */
+  limit: number;
+  /** Offset in completed_at-DESC order. */
+  offset: number;
+}
+
+export interface SearchRunsResult {
+  runs: RecentRunRow[];
+  /** Total number of rows matching the filter — drives pagination UI. */
+  total: number;
+}
+
+/**
+ * Searchable, paginated list of successful runs for the /runs page.
+ *
+ * Query semantics (case-insensitive substring against target_domain).
+ * If the query is empty, returns all runs. Limit is clamped to [1, 50]
+ * to keep payloads modest (each row carries the full result JSONB).
+ */
+export async function searchRuns(args: SearchRunsArgs): Promise<SearchRunsResult> {
+  let supabase;
+  try {
+    supabase = getSupabaseAdmin();
+  } catch {
+    return { runs: [], total: 0 };
+  }
+
+  const limit = Math.max(1, Math.min(args.limit, 50));
+  const offset = Math.max(0, args.offset);
+  const trimmed = args.query?.trim() ?? "";
+
+  let countQuery = supabase
+    .from("research_runs")
+    .select("id", { count: "exact", head: true })
+    .in("status", ["done", "degraded"])
+    .not("result", "is", null);
+
+  let dataQuery = supabase
+    .from("research_runs")
+    .select(
+      "id, target_domain, result, duration_ms, completed_at, creator_session_id"
+    )
+    .in("status", ["done", "degraded"])
+    .not("result", "is", null)
+    .order("completed_at", { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  if (trimmed) {
+    // PostgREST `ilike` — case-insensitive substring on target_domain.
+    // company_name lives inside `result` JSONB; matching it would require
+    // a server-side filter expression we don't have a clean PostgREST
+    // form for, so we keep the search to target_domain for now.
+    const pattern = `%${trimmed.replace(/[%_]/g, (m) => `\\${m}`)}%`;
+    countQuery = countQuery.ilike("target_domain", pattern);
+    dataQuery = dataQuery.ilike("target_domain", pattern);
+  }
+
+  const [countRes, dataRes] = await Promise.all([countQuery, dataQuery]);
+
+  if (countRes.error) {
+    console.warn("[searchRuns] count query error:", countRes.error.message);
+  }
+  if (dataRes.error || !dataRes.data) {
+    if (dataRes.error) {
+      console.warn("[searchRuns] data query error:", dataRes.error.message);
+    }
+    return { runs: [], total: countRes.count ?? 0 };
+  }
+
+  const runs = dataRes.data.map((row): RecentRunRow => {
+    const result = row.result as
+      | {
+          recon?: { one_liner?: string };
+          people?: { decision_makers?: unknown[] };
+        }
+      | null;
+    return {
+      id: row.id as string,
+      target_domain: row.target_domain as string,
+      one_liner: result?.recon?.one_liner ?? "",
+      duration_ms: (row.duration_ms as number | null) ?? null,
+      decision_maker_count: result?.people?.decision_makers?.length ?? 0,
+      completed_at: row.completed_at as string,
+      creator_session_id: (row.creator_session_id as string | null) ?? null,
+    };
+  });
+
+  return {
+    runs,
+    total: countRes.count ?? runs.length,
+  };
+}
+
 /**
  * Delete a run if and only if the supplied sessionId matches the row's
  * creator_session_id. Returns one of three results so the caller can
