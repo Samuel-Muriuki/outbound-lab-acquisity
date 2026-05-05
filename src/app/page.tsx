@@ -1,16 +1,19 @@
 import { Suspense } from "react";
 import { HeroInput } from "@/components/hero-input";
+import { InteractiveBackground } from "@/components/interactive-background";
 import { RecentRunsPreview } from "@/components/landing/recent-runs-preview";
 
 export const dynamic = "force-dynamic";
 
 export default function HomePage() {
   return (
-    <main
-      id="main"
-      tabIndex={-1}
-      className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-16 sm:px-6 md:py-24 lg:px-8 focus:outline-none"
-    >
+    <>
+      <InteractiveBackground variant="spotlight" />
+      <main
+        id="main"
+        tabIndex={-1}
+        className="relative z-10 mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-16 sm:px-6 md:py-24 lg:px-8 focus:outline-none"
+      >
       <header className="flex items-center gap-3">
         <span
           className="size-3 rounded-full gradient-bg"
@@ -41,6 +44,7 @@ export default function HomePage() {
       <Suspense fallback={null}>
         <RecentRunsPreview />
       </Suspense>
-    </main>
+      </main>
+    </>
   );
 }
