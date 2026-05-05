@@ -22,7 +22,7 @@ const RECON_BRIEF: ReconnaissanceOutputT = {
     "B2B sales teams at AI-product companies, especially startups under 200 people.",
   company_size_estimate: "20-50 employees",
   recent_signals: [],
-  sources: ["https://acquisity.com"],
+  sources: ["https://acquisity.ai"],
 };
 
 const VALID_OUTPUT = {
@@ -31,7 +31,7 @@ const VALID_OUTPUT = {
       name: "Tasnim A.",
       role: "Global TA & People Experience Leader",
       why_them: "Owns TA hiring strategy at Acquisity; would directly evaluate this kind of pitch.",
-      source_url: "https://acquisity.com/team",
+      source_url: "https://acquisity.ai/team",
       linkedin_url: "https://linkedin.com/in/tasnim-a",
     },
   ],
@@ -130,7 +130,7 @@ describe("runAgent2()", () => {
               name: "Marcus Reed",
               role: "Head of Sales",
               why_them: "Owns sales hiring strategy at Acquisity.",
-              source_url: "https://acquisity.com/team",
+              source_url: "https://acquisity.ai/team",
               linkedin_url: null,
             },
           ],
@@ -146,7 +146,7 @@ describe("runAgent2()", () => {
     const out = await runAgent2(RECON_BRIEF, "run-id", emit);
     expect(out.decision_makers).toHaveLength(1);
     expect(webFetchExecute).toHaveBeenCalledWith({
-      url: "https://acquisity.com/team",
+      url: "https://acquisity.ai/team",
     });
   });
 
@@ -161,7 +161,7 @@ describe("runAgent2()", () => {
               name: "Made Up Person",
               role: "VP Imaginary",
               why_them: "Fabricated by the model — should be dropped by validation.",
-              source_url: "https://acquisity.com/team",
+              source_url: "https://acquisity.ai/team",
               linkedin_url: null,
             },
           ],
@@ -195,7 +195,7 @@ describe("runAgent2()", () => {
               name: "Marcus Reed",
               role: "VP Imaginary",
               why_them: "Won't survive validation — fetch will throw.",
-              source_url: "https://acquisity.com/team",
+              source_url: "https://acquisity.ai/team",
               linkedin_url: null,
             },
           ],

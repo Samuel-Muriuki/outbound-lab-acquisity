@@ -34,7 +34,7 @@ export function isPrivateHostname(hostname: string): boolean {
  *
  * Exported transformations:
  *  - Trims input
- *  - Forces protocol to https:// when omitted (e.g. "acquisity.com" → "https://acquisity.com")
+ *  - Forces protocol to https:// when omitted (e.g. "acquisity.ai" → "https://acquisity.ai")
  *  - Lowercases hostname (normaliseDomain takes care of www/trailing-slash later)
  *  - Caps total length at 500 characters
  *  - Rejects private addresses to block SSRF / abuse
@@ -55,7 +55,7 @@ export const ResearchInput = z.object({
     .pipe(
       z
         .string()
-        .url({ message: "Enter a valid URL like https://acquisity.com." })
+        .url({ message: "Enter a valid URL like https://acquisity.ai." })
     )
     .refine(
       (value) => {

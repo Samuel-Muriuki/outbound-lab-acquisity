@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { ResearchInput } from "@/lib/validation/research-input";
 import { cn } from "@/lib/utils";
 
-const ACQUISITY_PRESET = "https://acquisity.com";
+const ACQUISITY_PRESET = "https://acquisity.ai";
 /**
  * Delay between preset-click and auto-submit. Per
  * `.ai/docs/12-ux-flows.md` §1.6: gives the visitor a beat to register
@@ -152,7 +152,7 @@ export function HeroInput() {
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
-            placeholder="https://acquisity.com"
+            placeholder="https://acquisity.ai"
             value={value}
             onChange={(event) => {
               setValue(event.target.value);

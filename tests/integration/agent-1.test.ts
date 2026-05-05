@@ -2,7 +2,7 @@
  * Integration test for Agent 1 (Reconnaissance).
  *
  * Calls the **real** Groq API + the **real** Tavily search + real
- * fetch() against acquisity.com. Asserts the output passes Zod
+ * fetch() against acquisity.ai. Asserts the output passes Zod
  * validation and the company_name + sources look right.
  *
  * Skipped automatically when:
@@ -23,7 +23,7 @@ import { runAgent1 } from "@/lib/agents/agent-1-reconnaissance";
 import { ReconnaissanceOutput } from "@/lib/agents/schemas";
 import type { StreamEvent } from "@/lib/agents/stream-events";
 
-const TARGET_URL = "https://acquisity.com";
+const TARGET_URL = "https://acquisity.ai";
 const TIMEOUT_MS = 90_000;
 
 function shouldSkip(): { skip: boolean; reason: string } {

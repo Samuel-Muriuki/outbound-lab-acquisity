@@ -73,7 +73,7 @@ const VALID_OUTPUT = {
     "B2B sales teams at AI-product companies, especially startups under 200 people who need outbound velocity without hiring SDRs.",
   company_size_estimate: "20-50 employees",
   recent_signals: ["Hiring a senior full-stack engineer in May 2026."],
-  sources: ["https://acquisity.com", "https://acquisity.com/about"],
+  sources: ["https://acquisity.ai", "https://acquisity.ai/about"],
 };
 
 function makeChatResult(overrides: Partial<ChatResult> = {}): ChatResult {
@@ -108,7 +108,7 @@ describe("runAgent1()", () => {
     );
 
     const { emit, events } = captureEvents();
-    const out = await runAgent1("https://acquisity.com", "run-id-1", emit);
+    const out = await runAgent1("https://acquisity.ai", "run-id-1", emit);
 
     expect(out).toEqual(VALID_OUTPUT);
     expect(chatMock).toHaveBeenCalledOnce();
@@ -130,7 +130,7 @@ describe("runAgent1()", () => {
           {
             id: "call_1",
             name: "web_fetch",
-            arguments: { url: "https://acquisity.com" },
+            arguments: { url: "https://acquisity.ai" },
           },
         ],
         finishReason: "tool_calls",
@@ -142,7 +142,7 @@ describe("runAgent1()", () => {
     );
 
     const { emit, events } = captureEvents();
-    const out = await runAgent1("https://acquisity.com", "run-id-2", emit);
+    const out = await runAgent1("https://acquisity.ai", "run-id-2", emit);
 
     expect(out).toEqual(VALID_OUTPUT);
     expect(chatMock).toHaveBeenCalledTimes(2);
@@ -159,7 +159,7 @@ describe("runAgent1()", () => {
       type: "tool_call",
       agent: 1,
       tool: "web_fetch",
-      input: { url: "https://acquisity.com" },
+      input: { url: "https://acquisity.ai" },
     });
     const toolResultEvent = events.find((e) => e.type === "tool_result");
     expect(toolResultEvent).toMatchObject({
@@ -174,7 +174,7 @@ describe("runAgent1()", () => {
     chatMock.mockResolvedValueOnce(makeChatResult({ text: fenced }));
 
     const { emit } = captureEvents();
-    const out = await runAgent1("https://acquisity.com", "run-id-3", emit);
+    const out = await runAgent1("https://acquisity.ai", "run-id-3", emit);
     expect(out).toEqual(VALID_OUTPUT);
   });
 
@@ -189,7 +189,7 @@ describe("runAgent1()", () => {
     );
 
     const { emit, events } = captureEvents();
-    const out = await runAgent1("https://acquisity.com", "run-id-4", emit);
+    const out = await runAgent1("https://acquisity.ai", "run-id-4", emit);
     expect(out).toEqual(VALID_OUTPUT);
     expect(chatMock).toHaveBeenCalledTimes(2);
     expect(
@@ -207,7 +207,7 @@ describe("runAgent1()", () => {
 
     const { emit, events } = captureEvents();
     await expect(
-      runAgent1("https://acquisity.com", "run-id-5", emit)
+      runAgent1("https://acquisity.ai", "run-id-5", emit)
     ).rejects.toThrow();
     // Initial attempt + 2 retries = 3 chat() calls
     expect(chatMock).toHaveBeenCalledTimes(3);
@@ -238,7 +238,7 @@ describe("runAgent1()", () => {
     );
 
     const { emit } = captureEvents();
-    const out = await runAgent1("https://acquisity.com", "run-id-6", emit);
+    const out = await runAgent1("https://acquisity.ai", "run-id-6", emit);
     expect(out).toEqual(VALID_OUTPUT);
 
     // Last chat() call's messages should include the nudge text
@@ -258,7 +258,7 @@ describe("runAgent1()", () => {
 
     const { emit } = captureEvents();
     await expect(
-      runAgent1("https://acquisity.com", "run-id-7", emit)
+      runAgent1("https://acquisity.ai", "run-id-7", emit)
     ).rejects.toBeInstanceOf(AllProvidersFailedError);
     // The agent retries (since AllProvidersFailedError surfaces as a
     // generic Error from runOnce's perspective), so 3 attempts total.

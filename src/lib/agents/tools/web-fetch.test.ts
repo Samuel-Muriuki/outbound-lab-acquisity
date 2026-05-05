@@ -62,7 +62,7 @@ describe("webFetchTool.execute()", () => {
         </html>
       `,
     });
-    const out = await webFetchTool.execute({ url: "https://acquisity.com" });
+    const out = await webFetchTool.execute({ url: "https://acquisity.ai" });
     expect(out).toContain("Acquisity — AI Growth System");
     expect(out).toContain("We build AI agents for B2B sales teams.");
     expect(out).not.toMatch(/tracking\(\)/);
