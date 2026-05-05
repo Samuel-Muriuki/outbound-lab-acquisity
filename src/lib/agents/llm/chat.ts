@@ -47,25 +47,50 @@ export class AllProvidersFailedError extends Error {
 const RETRYABLE_HTTP_STATUS = new Set([408, 429, 500, 502, 503, 504]);
 
 /**
+ * Pull the HTTP status off an error regardless of whether it came from
+ * the AI SDK (`statusCode`) or a hand-crafted error in tests (`status`).
+ */
+function getStatus(err: unknown): number | undefined {
+  if (!(err instanceof Error)) return undefined;
+  const e = err as { status?: unknown; statusCode?: unknown };
+  if (typeof e.statusCode === "number") return e.statusCode;
+  if (typeof e.status === "number") return e.status;
+  return undefined;
+}
+
+/**
  * Groq's `tool_use_failed` (HTTP 400) means Llama emitted a tool call
  * Groq's own validator rejected. It's non-deterministic — Gemini handles
  * tool calls differently and usually succeeds on the same prompt — so
  * treat it as retryable to fall through the provider chain rather than
  * surfacing a 400 to the user.
+ *
+ * Inspects both shapes:
+ *  - AI SDK `APICallError`: body is a JSON string on `responseBody`
+ *  - Fake / hand-crafted (test) errors: parsed body on `error`
  */
 function isToolUseFailed(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
-  const status = (err as { status?: number }).status;
-  if (status !== 400) return false;
-  const body = (err as { error?: { code?: unknown } }).error;
-  if (body && body.code === "tool_use_failed") return true;
+  if (getStatus(err) !== 400) return false;
+  const e = err as { error?: { code?: unknown }; responseBody?: unknown };
+  if (e.error && e.error.code === "tool_use_failed") return true;
+  if (typeof e.responseBody === "string") {
+    try {
+      const parsed = JSON.parse(e.responseBody) as {
+        error?: { code?: unknown };
+      };
+      if (parsed.error?.code === "tool_use_failed") return true;
+    } catch {
+      // fall through to message regex
+    }
+  }
   return /failed to call a function/i.test(err.message);
 }
 
 function isRetryable(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
   if (err.name === "AbortError") return false;
-  const status = (err as { status?: number }).status;
+  const status = getStatus(err);
   if (typeof status === "number" && RETRYABLE_HTTP_STATUS.has(status)) {
     return true;
   }
