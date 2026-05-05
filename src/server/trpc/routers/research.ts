@@ -16,7 +16,8 @@ import {
   getRunStatus,
   type AgentMessageRow,
 } from "@/lib/db/queries";
-import { runResearch } from "@/lib/agents/orchestrator";
+import { runResearch, type ResearchResult } from "@/lib/agents/orchestrator";
+import { runAgent3 } from "@/lib/agents/agent-3-email";
 import type { AgentIndex, StreamEvent } from "@/lib/agents/stream-events";
 
 const RunIdInput = z.object({
@@ -259,6 +260,103 @@ export const researchRouter = router({
         tone: run.tone,
         channel: run.channel,
       });
+    }),
+
+  /**
+   * Re-run Agent 3 only with a different decision maker as the email
+   * target. Loads the run's persisted recon + people, calls Agent 3
+   * with `targetIndex`, returns the new EmailOutput.
+   *
+   * Does NOT persist the new email back to research_runs.result —
+   * keeps the original deliverable intact and lets the visitor explore
+   * variants client-side. They can copy whichever they like.
+   */
+  regenerateEmail: publicProcedure
+    .input(
+      z.object({
+        id: z
+          .string()
+          .regex(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+            { message: "Invalid run id." }
+          ),
+        targetIndex: z.number().int().min(0).max(20),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const supabase = getSupabaseAdmin();
+      const { data, error } = await supabase
+        .from("research_runs")
+        .select("status, result, tone, channel")
+        .eq("id", input.id)
+        .maybeSingle<{
+          status: string;
+          result: ResearchResult | null;
+          tone: "cold" | "warm";
+          channel: "email" | "linkedin" | "x";
+        }>();
+      if (error) {
+        console.error(
+          "[trpc research.regenerateEmail] select failed:",
+          error.message
+        );
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Could not load run.",
+        });
+      }
+      if (!data) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Run not found.",
+        });
+      }
+      if (
+        (data.status !== "done" && data.status !== "degraded") ||
+        !data.result
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Run isn't finished yet — can't regenerate the email.",
+        });
+      }
+
+      if (input.targetIndex >= data.result.people.decision_makers.length) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "That decision maker doesn't exist on this run.",
+        });
+      }
+
+      try {
+        const result = await runAgent3(
+          data.result.recon,
+          data.result.people,
+          input.id,
+          () => {
+            /* no-op — this is a one-shot mutation, not a stream */
+          },
+          {
+            tone: data.tone,
+            channel: data.channel,
+            targetIndex: input.targetIndex,
+          }
+        );
+        return {
+          email: result.output,
+          degraded: result.degraded,
+          forbiddenReason: result.forbiddenReason,
+        };
+      } catch (err) {
+        console.error(
+          "[trpc research.regenerateEmail] Agent 3 failed:",
+          err instanceof Error ? err.message : err
+        );
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Could not regenerate the email. Try again.",
+        });
+      }
     }),
 });
 

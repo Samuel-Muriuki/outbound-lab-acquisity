@@ -184,7 +184,7 @@ export function ResearchView({
       )}
 
       {stream.status === "done" && stream.result && (
-        <ResultSection result={stream.result} />
+        <ResultSection result={stream.result} runId={runId} />
       )}
 
       {stream.status === "done" && stream.result && similarRuns.length > 0 && (
@@ -201,7 +201,13 @@ export function ResearchView({
  * deliverable when the run finishes (rather than having to scroll past
  * the agent timeline manually).
  */
-function ResultSection({ result }: { result: NonNullable<ReturnType<typeof useResearchStream>["result"]> }) {
+function ResultSection({
+  result,
+  runId,
+}: {
+  result: NonNullable<ReturnType<typeof useResearchStream>["result"]>;
+  runId: string;
+}) {
   const sectionRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -221,7 +227,7 @@ function ResultSection({ result }: { result: NonNullable<ReturnType<typeof useRe
   return (
     <section ref={sectionRef} className="mt-10 scroll-mt-12">
       <TiltedWrapper rotateAmplitude={3} scaleOnHover={1.005}>
-        <ResultCard result={result} />
+        <ResultCard result={result} runId={runId} />
       </TiltedWrapper>
     </section>
   );
