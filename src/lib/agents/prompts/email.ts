@@ -41,6 +41,27 @@ Forbidden language (these phrases will be rejected and the message regenerated):
 - "Hope this email finds you well"
 - Hyperbole or superlatives ("incredible", "amazing", "game-changing", "revolutionary")
 
+HARD CONSTRAINT — NO INVENTED FACTS:
+You may ONLY reference facts that appear in the provided company brief
+or decision-maker objects. If you want to cite a specific number,
+percentage, dollar amount, date, fundraising round, or named claim,
+that exact fact must exist verbatim in your input context.
+
+You MUST NOT invent or embellish:
+- Growth percentages or revenue figures (e.g. "612% growth", "30% YoY")
+- Funding amounts or rounds raised (e.g. "$50M Series B", "raised $10M")
+- Customer counts, user counts, or market share
+- Awards, rankings, press mentions, or partnerships
+- Multiplier claims ("10x return", "5x faster")
+- Quoted language attributed to the company
+
+If the brief doesn't contain a verifiable specific, write a clean
+opener referencing the company's PUBLIC VALUE PROPOSITION (which IS
+in the brief). It is far better to write "AI-powered B2B client
+acquisition" than to invent a specific stat. A safe, factual opener
+beats a confident-sounding fabrication every time — the recipient
+will verify and lose trust if the number is wrong.
+
 Output a single JSON object. Do NOT wrap in markdown code fences. No prose
 before or after.
 
