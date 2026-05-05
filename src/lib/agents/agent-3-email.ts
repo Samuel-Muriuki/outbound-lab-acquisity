@@ -10,6 +10,7 @@ import {
 import { EMAIL_SYSTEM, emailUserPrompt } from "./prompts/email";
 import { extractJSON } from "./utils/extract-json";
 import { findForbiddenPhrase } from "./utils/forbidden-phrases";
+import { findUnverifiableClaim } from "./utils/unverifiable-claims";
 import type { EmitFn } from "./stream-events";
 
 /** Per `.ai/docs/06-agent-system-design.md` §8.4 — creative agent vs factual. */
@@ -163,6 +164,30 @@ export async function runAgent3(
       };
     }
 
+    // Anti-hallucination gate. Specific numeric / fundraising claims
+    // are treated as suspect by default — even when present in the
+    // brief, since the brief itself can carry an upstream fabrication
+    // from Agent 1. Force Agent 3 to fall back to the public value
+    // proposition.
+    const unverifiable = findUnverifiableClaim(parsed.body);
+    if (unverifiable) {
+      const reasonLabel = `unverifiable claim — ${unverifiable.reason}`;
+      firstForbiddenReason = firstForbiddenReason ?? reasonLabel;
+      if (attempt < MAX_RETRIES) {
+        emit({
+          type: "agent_thinking",
+          agent: 3,
+          delta: `Retry — body contained ${unverifiable.reason}: "${unverifiable.match}"`,
+        });
+        continue;
+      }
+      return {
+        output: parsed,
+        degraded: true,
+        forbiddenReason: firstForbiddenReason,
+      };
+    }
+
     // Clean output.
     return {
       output: parsed,
@@ -188,7 +213,9 @@ function buildRetryPrompt(
   zodError: Error | null
 ): string {
   const correction = forbiddenReason
-    ? `Your previous draft contained a ${forbiddenReason}. Rewrite WITHOUT any of the forbidden phrases listed in the system prompt. Be specific and quiet — the brief has plenty of factual hooks to open with.`
+    ? forbiddenReason.startsWith("unverifiable claim")
+      ? `Your previous draft contained an ${forbiddenReason} — a specific number or fundraising claim that the recipient could verify and find wrong. Rewrite the opener using ONLY the public value proposition from the brief (what the company sells, who it sells to). Do NOT use any specific percentage, dollar figure, multiplier, customer count, or funding round. A safe factual reference to the company's product is far better than a confident-sounding stat.`
+      : `Your previous draft contained a ${forbiddenReason}. Rewrite WITHOUT any of the forbidden phrases listed in the system prompt. Be specific and quiet — the brief has plenty of factual hooks to open with.`
     : zodError
       ? `Your previous output did not match the required JSON schema (${zodError.message.slice(0, 200)}). Output ONLY the JSON object with all required fields populated.`
       : "Try again, sticking strictly to the system-prompt requirements.";
