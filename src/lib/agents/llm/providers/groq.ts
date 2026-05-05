@@ -12,6 +12,38 @@ import { toOpenAIMessage, mapOpenAIFinishReason } from "../utils/messages";
 const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
 const GROQ_MODEL = "llama-3.3-70b-versatile";
 
+/** Truncate the failed_generation snippet so a 30 KB tool_calls dump
+ *  doesn't drown the server log on a bad day. */
+const FAILED_GEN_LOG_CHARS = 1_000;
+
+/**
+ * Surface Groq's `failed_generation` field on `tool_use_failed` errors.
+ *
+ * Groq rejects tool calls server-side when Llama emits arguments that
+ * don't match the function schema (e.g. wrong type, bad JSON, hallucinated
+ * tool name). Their 400 response includes `error.failed_generation` with
+ * the exact broken payload — invaluable for diagnosis. The OpenAI SDK
+ * exposes the parsed body as `APIError.error`, so we read it here, log
+ * the snippet, and re-throw with the original message preserved (so the
+ * regex in chat.ts:isRetryable still matches and the chain falls through
+ * to Gemini). Returns the input unchanged if it isn't a Groq tool-use
+ * failure.
+ */
+function annotateGroqError(err: unknown): unknown {
+  if (!(err instanceof OpenAI.APIError)) return err;
+  if (err.status !== 400) return err;
+  const body = err.error as { code?: unknown; failed_generation?: unknown } | null | undefined;
+  if (!body || body.code !== "tool_use_failed") return err;
+  const failedGeneration = typeof body.failed_generation === "string"
+    ? body.failed_generation.slice(0, FAILED_GEN_LOG_CHARS)
+    : "(no failed_generation field on response)";
+  console.error(
+    `[groq] tool_use_failed — Llama emitted an invalid tool call. ` +
+    `failed_generation (truncated to ${FAILED_GEN_LOG_CHARS} chars):\n${failedGeneration}`
+  );
+  return err;
+}
+
 /**
  * Groq provider — primary in the locked chain.
  *
@@ -44,23 +76,28 @@ export function createGroqProvider(): LLMProvider {
         },
       }));
 
-      const response = await client.chat.completions.create(
-        {
-          model: GROQ_MODEL,
-          messages: [
-            { role: "system", content: opts.system },
-            ...opts.messages.map(toOpenAIMessage),
-          ],
-          tools,
-          temperature: opts.temperature ?? 0.2,
-          max_tokens: opts.maxTokens ?? 2048,
-          response_format:
-            opts.responseFormat === "json"
-              ? { type: "json_object" }
-              : undefined,
-        },
-        { signal: opts.abortSignal }
-      );
+      let response;
+      try {
+        response = await client.chat.completions.create(
+          {
+            model: GROQ_MODEL,
+            messages: [
+              { role: "system", content: opts.system },
+              ...opts.messages.map(toOpenAIMessage),
+            ],
+            tools,
+            temperature: opts.temperature ?? 0.2,
+            max_tokens: opts.maxTokens ?? 2048,
+            response_format:
+              opts.responseFormat === "json"
+                ? { type: "json_object" }
+                : undefined,
+          },
+          { signal: opts.abortSignal }
+        );
+      } catch (err) {
+        throw annotateGroqError(err);
+      }
 
       const choice = response.choices[0];
       const rawToolCalls = choice?.message?.tool_calls ?? [];
