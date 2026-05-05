@@ -177,6 +177,9 @@ export async function GET(
  */
 async function* replayAndPoll(runId: string): AsyncGenerator<StreamEvent> {
   const replayed = new Set<AgentIndex>();
+  /** The index of the agent we've already emitted `agent_start` for but
+   *  not yet `agent_done` — the one the visitor sees with a spinner. */
+  let inFlightAgent: AgentIndex | null = null;
 
   function eventsForAgentRow(row: AgentMessageRow): StreamEvent[] {
     const agent = row.agent_index as AgentIndex;
@@ -191,6 +194,27 @@ async function* replayAndPoll(runId: string): AsyncGenerator<StreamEvent> {
     ];
   }
 
+  /**
+   * Emit agent_start for the next agent the orchestrator is presumed
+   * to be working on, given the set of done agents. If everything's
+   * done, we don't emit anything and the polling loop will catch
+   * status='done' on the next tick.
+   */
+  function nextInFlightAgent(): AgentIndex | null {
+    for (const agent of [1, 2, 3] as const) {
+      if (!replayed.has(agent)) return agent;
+    }
+    return null;
+  }
+
+  function* maybeEmitInFlight(): Generator<StreamEvent> {
+    const next = nextInFlightAgent();
+    if (next === null) return;
+    if (inFlightAgent === next) return;
+    inFlightAgent = next;
+    yield { type: "agent_start", agent: next, name: AGENT_NAMES[next] };
+  }
+
   const initial = await getAgentDoneMessages(runId);
   for (const row of initial) {
     const agent = row.agent_index as AgentIndex;
@@ -198,6 +222,10 @@ async function* replayAndPoll(runId: string): AsyncGenerator<StreamEvent> {
     for (const ev of eventsForAgentRow(row)) yield ev;
     replayed.add(agent);
   }
+  // Visitor lands with the next agent already in 'running' state so
+  // the timeline shows an active spinner instead of a static
+  // pending → done jump.
+  for (const ev of maybeEmitInFlight()) yield ev;
 
   const startedAt = Date.now();
   while (Date.now() - startedAt < REATTACH_MAX_LOOP_MS) {
@@ -206,11 +234,29 @@ async function* replayAndPoll(runId: string): AsyncGenerator<StreamEvent> {
     );
 
     const latest = await getAgentDoneMessages(runId);
+    let advanced = false;
     for (const row of latest) {
       const agent = row.agent_index as AgentIndex;
       if (replayed.has(agent)) continue;
-      for (const ev of eventsForAgentRow(row)) yield ev;
+      // The agent the in-flight spinner was tracking just finished —
+      // emit only its agent_done (start was already sent), then move
+      // the spinner to the next agent.
+      if (inFlightAgent === agent) {
+        yield {
+          type: "agent_done",
+          agent,
+          output: row.content,
+          duration_ms: row.duration_ms ?? 0,
+        };
+      } else {
+        for (const ev of eventsForAgentRow(row)) yield ev;
+      }
       replayed.add(agent);
+      advanced = true;
+    }
+    if (advanced) {
+      inFlightAgent = null;
+      for (const ev of maybeEmitInFlight()) yield ev;
     }
 
     const status = await getRunStatus(runId);
