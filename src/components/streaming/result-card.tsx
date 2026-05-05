@@ -1,12 +1,47 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ComponentType, type SVGProps } from "react";
 import { ArrowUpRight, Copy, Mail, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import type { ResearchResult } from "@/lib/agents/orchestrator";
 import { cn } from "@/lib/utils";
+
+/**
+ * Brand marks (LinkedIn, X) inlined as single-path SVGs — lucide-react
+ * v1 dropped trademarked brand-icon exports, and three icons don't
+ * justify a separate brand-icon dep.
+ */
+function LinkedInMark(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden {...props}>
+      <path d="M20.45 20.45h-3.56v-5.57c0-1.33-.03-3.04-1.85-3.04-1.86 0-2.14 1.45-2.14 2.95v5.66H9.34V9h3.42v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.45v6.29ZM5.34 7.43A2.07 2.07 0 1 1 5.34 3.3a2.07 2.07 0 0 1 0 4.13Zm1.78 13.02H3.55V9h3.57v11.45ZM22.22 0H1.77C.79 0 0 .77 0 1.72v20.56C0 23.23.79 24 1.77 24h20.45C23.2 24 24 23.23 24 22.28V1.72C24 .77 23.2 0 22.22 0Z" />
+    </svg>
+  );
+}
+
+function XMark(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden {...props}>
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24h-6.66l-5.214-6.817-5.967 6.817H1.677l7.73-8.834L1.254 2.25h6.83l4.713 6.231 5.447-6.231Zm-1.16 17.52h1.834L7.084 4.126H5.117L17.084 19.77Z" />
+    </svg>
+  );
+}
+
+const CHANNEL_LABEL = {
+  email: "Email",
+  linkedin: "LinkedIn DM",
+  x: "X DM",
+} as const;
+
+type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
+
+const CHANNEL_ICON: Record<"email" | "linkedin" | "x", IconComponent> = {
+  email: Mail,
+  linkedin: LinkedInMark,
+  x: XMark,
+};
 
 interface ResultCardProps {
   result: ResearchResult;
@@ -37,7 +72,10 @@ function isUnknownSize(value: string): boolean {
  * tone='warm', and that's not in Phase 1 scope.
  */
 export function ResultCard({ result }: ResultCardProps) {
-  const { recon, people, degraded, forbiddenReason } = result;
+  const { recon, people, degraded, forbiddenReason, email } = result;
+  const channel = email.channel ?? "email";
+  const channelLabel = CHANNEL_LABEL[channel];
+  const ChannelIcon = CHANNEL_ICON[channel];
 
   return (
     <article className="glass-card rounded-xl border border-border p-6">
@@ -79,8 +117,8 @@ export function ResultCard({ result }: ResultCardProps) {
           </TabsTrigger>
           <TabsTrigger value="email">
             <span className="inline-flex items-center gap-1.5">
-              Email
-              <Mail className="size-3.5 text-brand-secondary" aria-hidden />
+              {channelLabel}
+              <ChannelIcon className="size-3.5 text-brand-secondary" aria-hidden />
             </span>
           </TabsTrigger>
           <TabsTrigger value="sources">Sources</TabsTrigger>
@@ -193,15 +231,18 @@ function PeoplePanel({ result }: ResultCardProps) {
 
 function EmailPanel({ result }: ResultCardProps) {
   const { email } = result;
+  const channel = email.channel ?? "email";
   const [isCopying, setIsCopying] = useState(false);
 
   async function handleCopy() {
     if (isCopying) return;
     setIsCopying(true);
     try {
-      const composed = `Subject: ${email.subject}\n\n${email.body}`;
+      const composed = email.subject
+        ? `Subject: ${email.subject}\n\n${email.body}`
+        : email.body;
       await navigator.clipboard.writeText(composed);
-      toast.success("Email copied to clipboard.");
+      toast.success(`${CHANNEL_LABEL[channel]} copied to clipboard.`);
     } catch (err) {
       toast.error(
         "Could not copy. Your browser may be blocking clipboard access."
@@ -219,9 +260,11 @@ function EmailPanel({ result }: ResultCardProps) {
           <span className="font-medium text-foreground">{email.to.name}</span>
           <span className="ml-2 text-subtle-foreground">{email.to.role}</span>
         </FieldRow>
-        <FieldRow label="Subject">
-          <span className="text-foreground">{email.subject}</span>
-        </FieldRow>
+        {email.subject ? (
+          <FieldRow label="Subject">
+            <span className="text-foreground">{email.subject}</span>
+          </FieldRow>
+        ) : null}
       </dl>
 
       <hr className="my-4 border-border" />
@@ -246,7 +289,7 @@ function EmailPanel({ result }: ResultCardProps) {
             )}
           >
             <Copy className="size-3.5" aria-hidden />
-            Copy email
+            Copy {CHANNEL_LABEL[channel].toLowerCase()}
           </button>
           <button
             type="button"

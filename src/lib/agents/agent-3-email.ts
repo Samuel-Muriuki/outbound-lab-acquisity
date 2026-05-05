@@ -3,6 +3,7 @@ import { chat } from "./llm/chat";
 import {
   EmailOutput,
   type EmailOutputT,
+  type OutreachChannelT,
   type PeopleOutputT,
   type ReconnaissanceOutputT,
 } from "./schemas";
@@ -21,6 +22,7 @@ const MAX_TOKENS = 1_024;
 
 export interface RunAgent3Options {
   tone?: "cold" | "warm";
+  channel?: OutreachChannelT;
 }
 
 export interface Agent3Result {
@@ -74,14 +76,15 @@ export async function runAgent3(
   options: RunAgent3Options = {}
 ): Promise<Agent3Result> {
   const tone = options.tone ?? "cold";
+  const channel = options.channel ?? "email";
   let firstForbiddenReason: string | null = null;
   let lastZodError: Error | null = null;
 
   for (let attempt = 0; attempt < MAX_RETRIES + 1; attempt++) {
     const userPrompt =
       attempt === 0
-        ? emailUserPrompt(brief, people, tone)
-        : buildRetryPrompt(brief, people, tone, firstForbiddenReason, lastZodError);
+        ? emailUserPrompt(brief, people, tone, channel)
+        : buildRetryPrompt(brief, people, tone, channel, firstForbiddenReason, lastZodError);
 
     const result = await chat(
       {
@@ -151,6 +154,7 @@ function buildRetryPrompt(
   brief: ReconnaissanceOutputT,
   people: PeopleOutputT,
   tone: "cold" | "warm",
+  channel: OutreachChannelT,
   forbiddenReason: string | null,
   zodError: Error | null
 ): string {
@@ -162,5 +166,5 @@ function buildRetryPrompt(
 
   return `${correction}
 
-${emailUserPrompt(brief, people, tone)}`;
+${emailUserPrompt(brief, people, tone, channel)}`;
 }

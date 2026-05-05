@@ -53,6 +53,7 @@ const EMAIL = {
     "Acquisity targets B2B sales teams at AI-product companies.",
   ],
   tone: "cold" as const,
+  channel: "email" as const,
 };
 
 // ---- Mocks ----
