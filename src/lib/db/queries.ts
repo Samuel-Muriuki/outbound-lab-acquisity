@@ -66,6 +66,8 @@ export interface RecentRunRow {
   duration_ms: number | null;
   decision_maker_count: number;
   completed_at: string;
+  /** Cookie-derived session id of the visitor who created this run. */
+  creator_session_id: string | null;
 }
 
 /**
@@ -91,7 +93,9 @@ export async function getRecentRuns(limit: number): Promise<RecentRunRow[]> {
 
   const { data, error } = await supabase
     .from("research_runs")
-    .select("id, target_domain, result, duration_ms, completed_at")
+    .select(
+      "id, target_domain, result, duration_ms, completed_at, creator_session_id"
+    )
     .in("status", ["done", "degraded"])
     .not("result", "is", null)
     .order("completed_at", { ascending: false })
@@ -118,8 +122,51 @@ export async function getRecentRuns(limit: number): Promise<RecentRunRow[]> {
       duration_ms: (row.duration_ms as number | null) ?? null,
       decision_maker_count: result?.people?.decision_makers?.length ?? 0,
       completed_at: row.completed_at as string,
+      creator_session_id: (row.creator_session_id as string | null) ?? null,
     };
   });
+}
+
+/**
+ * Delete a run if and only if the supplied sessionId matches the row's
+ * creator_session_id. Returns one of three results so the caller can
+ * tell apart "not found", "not yours", and "deleted".
+ *
+ * Cascades: research_messages and research_embeddings are linked by
+ * `run_id` FKs; their ON DELETE behaviour is set in the initial
+ * migration so deleting the parent row clears them too.
+ */
+export type DeleteRunResult = "deleted" | "not_found" | "forbidden";
+
+export async function deleteRun(
+  runId: string,
+  sessionId: string
+): Promise<DeleteRunResult> {
+  const supabase = getSupabaseAdmin();
+
+  const { data, error: lookupError } = await supabase
+    .from("research_runs")
+    .select("id, creator_session_id")
+    .eq("id", runId)
+    .maybeSingle<{ id: string; creator_session_id: string | null }>();
+
+  if (lookupError) {
+    console.error("[deleteRun] lookup failed:", lookupError.message);
+    throw new Error(`Could not look up run: ${lookupError.message}`);
+  }
+  if (!data) return "not_found";
+  if (data.creator_session_id !== sessionId) return "forbidden";
+
+  const { error: deleteError } = await supabase
+    .from("research_runs")
+    .delete()
+    .eq("id", runId);
+
+  if (deleteError) {
+    console.error("[deleteRun] delete failed:", deleteError.message);
+    throw new Error(`Could not delete run: ${deleteError.message}`);
+  }
+  return "deleted";
 }
 
 /** Move a pending row into running status when the orchestrator starts work. */

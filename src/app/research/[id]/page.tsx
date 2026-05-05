@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
+import { getSessionId } from "@/lib/session/cookie";
 import { ResearchView } from "@/components/streaming/research-view";
 import type { ResearchResult } from "@/lib/agents/orchestrator";
 
@@ -16,6 +17,7 @@ interface ResearchRunRow {
   cache_source_id: string | null;
   result: unknown;
   error_message: string | null;
+  creator_session_id: string | null;
 }
 
 /**
@@ -50,7 +52,7 @@ export default async function ResearchPage({
     const result = await supabase
       .from("research_runs")
       .select(
-        "id, target_url, target_domain, status, started_at, completed_at, cache_hit, cache_source_id, result, error_message"
+        "id, target_url, target_domain, status, started_at, completed_at, cache_hit, cache_source_id, result, error_message, creator_session_id"
       )
       .eq("id", id)
       .maybeSingle<ResearchRunRow>();
@@ -80,6 +82,12 @@ export default async function ResearchPage({
       : null;
   const initialError = data.status === "error" ? data.error_message : null;
 
+  const visitorSessionId = await getSessionId();
+  const isOwner =
+    visitorSessionId !== null &&
+    data.creator_session_id !== null &&
+    visitorSessionId === data.creator_session_id;
+
   return (
     <ResearchView
       runId={data.id}
@@ -90,6 +98,7 @@ export default async function ResearchPage({
       cacheSourceCompletedAt={
         data.cache_hit && data.cache_source_id ? data.completed_at : null
       }
+      isOwner={isOwner}
     />
   );
 }

@@ -7,6 +7,7 @@ import {
   useResearchStream,
   type UseResearchStreamArgs,
 } from "@/hooks/use-research-stream";
+import { DeleteRunButton } from "@/components/delete-run-button";
 import { AgentTimeline } from "./agent-timeline";
 import { ResultCard } from "./result-card";
 
@@ -18,6 +19,8 @@ export interface ResearchViewProps {
   initialError?: UseResearchStreamArgs["initialError"];
   /** Provided when the run was served from cache — drives the "served from cache" banner. */
   cacheSourceCompletedAt?: string | null;
+  /** True when the visitor's session cookie matches this run's creator. */
+  isOwner?: boolean;
 }
 
 /**
@@ -37,6 +40,7 @@ export function ResearchView({
   initialResult = null,
   initialError = null,
   cacheSourceCompletedAt = null,
+  isOwner = false,
 }: ResearchViewProps) {
   const stream = useResearchStream({
     runId,
@@ -68,6 +72,12 @@ export function ResearchView({
   // and is left for a follow-up PR.)
   const isInFlight =
     stream.status === "connecting" || stream.status === "streaming";
+  // Show the delete button only when the run is finished AND the visitor
+  // is the original creator. The DELETE endpoint validates the cookie
+  // server-side regardless — this is a UX gate.
+  const canDelete =
+    isOwner &&
+    (stream.status === "done" || stream.status === "error" || initialStatus === "degraded");
 
   const provider = stream.agents[1].provider ?? stream.agents[2].provider ?? stream.agents[3].provider;
   const totalDuration =
@@ -101,10 +111,15 @@ export function ResearchView({
             </>
           )}
         </Link>
-        <span className="flex items-center gap-2 text-sm">
-          <span className="size-2 rounded-full gradient-bg" aria-hidden />
-          <span className="font-medium tracking-tight">OutboundLab</span>
-        </span>
+        <div className="flex items-center gap-4">
+          {canDelete && (
+            <DeleteRunButton runId={runId} onDeleted="home" variant="with-label" />
+          )}
+          <span className="flex items-center gap-2 text-sm">
+            <span className="size-2 rounded-full gradient-bg" aria-hidden />
+            <span className="font-medium tracking-tight">OutboundLab</span>
+          </span>
+        </div>
       </header>
 
       <section className="mt-12">

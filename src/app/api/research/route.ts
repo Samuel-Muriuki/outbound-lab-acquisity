@@ -5,6 +5,7 @@ import {
 } from "@/lib/validation/research-input";
 import { BLOCKED_MESSAGE } from "@/lib/validation/profanity";
 import { isFamilyDnsBlocked } from "@/lib/validation/family-dns";
+import { getOrCreateSessionId } from "@/lib/session/cookie";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -88,12 +89,15 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const sessionId = await getOrCreateSessionId();
+
   const { data, error } = await supabase
     .from("research_runs")
     .insert({
       target_url: url,
       target_domain,
       status: "pending",
+      creator_session_id: sessionId,
     })
     .select("id")
     .single();
