@@ -1,138 +1,80 @@
 import "server-only";
-import {
-  GoogleGenerativeAI,
-  type Content,
-  type FunctionDeclaration,
-  type FunctionDeclarationSchema,
-  type Tool,
-} from "@google/generative-ai";
+import { generateText, tool } from "ai";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import type {
-  ChatMessage,
   ChatOptions,
   ChatResult,
   ChatToolCall,
   LLMProvider,
 } from "../types";
-import { zodToGeminiSchema } from "../utils/zod-schema";
+import { toAISDKMessages, mapAISDKFinishReason } from "../utils/messages";
 
 const GEMINI_MODEL = "gemini-2.5-flash";
 
 /**
  * Gemini provider — fallback when Groq rate-limits or is degraded.
  *
- * Different infrastructure (Google) so it doesn't share Groq's rate
- * limits. Free tier: 1,500 req/day on gemini-2.5-flash, plus unlimited
- * embeddings via text-embedding-004 (used in Phase 2 cache).
- *
- * Uses @google/generative-ai SDK directly (different schema language
- * than OpenAI; can't share the openai package).
+ * Migrated to the Vercel AI SDK (`@ai-sdk/google`). Different
+ * infrastructure (Google) so it doesn't share Groq's rate limits. Free
+ * tier: 1,500 req/day on gemini-2.5-flash.
  */
 export function createGeminiProvider(): LLMProvider {
   const apiKey = process.env.GEMINI_API_KEY;
-  const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
+  // The AI SDK reads GOOGLE_GENERATIVE_AI_API_KEY by default. Map our
+  // GEMINI_API_KEY env name onto that explicit factory call so we
+  // don't have to rename the env var across the deployed environments.
+  const provider = apiKey ? createGoogleGenerativeAI({ apiKey }) : null;
 
   return {
     name: "gemini",
     isAvailable: () => Boolean(apiKey),
     async chat(opts: ChatOptions): Promise<ChatResult> {
-      if (!genAI)
-        throw new Error("Gemini provider not configured (missing GEMINI_API_KEY)");
+      if (!provider) {
+        throw new Error(
+          "Gemini provider not configured (missing GEMINI_API_KEY)"
+        );
+      }
 
-      const tools: Tool[] = opts.tools
-        ? [
-            {
-              functionDeclarations: opts.tools.map((t) => ({
-                name: t.name,
+      const tools = opts.tools
+        ? Object.fromEntries(
+            opts.tools.map((t) => [
+              t.name,
+              tool({
                 description: t.description,
-                parameters: zodToGeminiSchema(
-                  t.parameters
-                ) as FunctionDeclarationSchema,
-              })) satisfies FunctionDeclaration[],
-            },
-          ]
-        : [];
+                inputSchema: t.parameters,
+              }),
+            ])
+          )
+        : undefined;
 
-      const model = genAI.getGenerativeModel({
-        model: GEMINI_MODEL,
-        systemInstruction: opts.system,
+      const result = await generateText({
+        model: provider(GEMINI_MODEL),
+        system: opts.system,
+        messages: toAISDKMessages(opts.messages),
         tools,
-        generationConfig: {
-          temperature: opts.temperature ?? 0.2,
-          maxOutputTokens: opts.maxTokens ?? 2048,
-          responseMimeType:
-            opts.responseFormat === "json"
-              ? "application/json"
-              : "text/plain",
-        },
+        temperature: opts.temperature ?? 0.2,
+        maxOutputTokens: opts.maxTokens ?? 2048,
+        abortSignal: opts.abortSignal,
+        // Gemini exposes `responseMimeType` via providerOptions for JSON.
+        providerOptions: opts.responseFormat === "json"
+          ? { google: { responseMimeType: "application/json" } }
+          : undefined,
       });
 
-      const result = await model.generateContent({
-        contents: opts.messages
-          .filter((m) => m.role !== "system")
-          .map(toGeminiContent),
-      });
-
-      const response = result.response;
-      const text = response.text();
-      const fnCalls = response.functionCalls() ?? [];
-
-      const toolCalls: ChatToolCall[] = fnCalls.map((fc, i) => ({
-        id: `gemini-tool-${i}`,
-        name: fc.name,
-        arguments: (fc.args ?? {}) as Record<string, unknown>,
+      const toolCalls: ChatToolCall[] = result.toolCalls.map((tc) => ({
+        id: tc.toolCallId,
+        name: tc.toolName,
+        arguments: (tc.input ?? {}) as Record<string, unknown>,
       }));
 
       return {
-        text,
+        text: result.text,
         toolCalls,
-        finishReason: toolCalls.length > 0 ? "tool_calls" : "stop",
+        finishReason: mapAISDKFinishReason(result.finishReason),
         provider: "gemini",
-        tokensIn: response.usageMetadata?.promptTokenCount ?? 0,
-        tokensOut: response.usageMetadata?.candidatesTokenCount ?? 0,
+        tokensIn: result.usage?.inputTokens ?? 0,
+        tokensOut: result.usage?.outputTokens ?? 0,
       };
     },
   };
-}
-
-/**
- * Convert our internal ChatMessage to Gemini's Content shape.
- * Gemini uses `user` and `model` roles only — assistant maps to model.
- * Tool messages go in as `function`-role parts.
- */
-function toGeminiContent(message: ChatMessage): Content {
-  if (message.role === "tool") {
-    if (!message.tool_call_id) {
-      throw new Error("Tool message must include tool_call_id");
-    }
-    return {
-      role: "function",
-      parts: [
-        {
-          functionResponse: {
-            // Gemini binds responses by name, not id; the orchestrator
-            // tracks which call this is via tool_call_id.
-            name: message.tool_call_id,
-            response: { content: message.content },
-          },
-        },
-      ],
-    };
-  }
-  if (message.role === "assistant") {
-    const parts: Content["parts"] = [];
-    if (message.content) parts.push({ text: message.content });
-    if (message.tool_calls) {
-      for (const tc of message.tool_calls) {
-        parts.push({
-          functionCall: {
-            name: tc.name,
-            args: tc.arguments,
-          },
-        });
-      }
-    }
-    return { role: "model", parts };
-  }
-  // user
-  return { role: "user", parts: [{ text: message.content }] };
 }
