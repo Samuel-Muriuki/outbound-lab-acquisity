@@ -55,6 +55,7 @@ const VALID_EMAIL = {
     "Recent funding round signals scaling intent.",
   ],
   tone: "cold" as const,
+  channel: "email" as const,
 };
 
 const FORBIDDEN_EMAIL = {

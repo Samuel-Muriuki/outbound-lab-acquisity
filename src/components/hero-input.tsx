@@ -9,10 +9,14 @@ import {
   type FormEvent,
 } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Loader2, Sparkles } from "lucide-react";
+import { ArrowRight, Loader2, Mail, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ResearchInput } from "@/lib/validation/research-input";
+import {
+  ResearchInput,
+  type ResearchChannelT,
+  type ResearchToneT,
+} from "@/lib/validation/research-input";
 import { cn } from "@/lib/utils";
 
 const ACQUISITY_PRESET = "https://www.acquisity.ai/";
@@ -47,6 +51,8 @@ export function HeroInput() {
   const formRef = useRef<HTMLFormElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [value, setValue] = useState("");
+  const [tone, setTone] = useState<ResearchToneT>("cold");
+  const [channel, setChannel] = useState<ResearchChannelT>("email");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, startSubmit] = useTransition();
 
@@ -77,7 +83,7 @@ export function HeroInput() {
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const result = ResearchInput.safeParse({ url: value });
+    const result = ResearchInput.safeParse({ url: value, tone, channel });
     if (!result.success) {
       setError(result.error.issues[0]?.message ?? "Enter a valid URL.");
       return;
@@ -88,7 +94,11 @@ export function HeroInput() {
         const response = await fetch("/api/research", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: result.data.url }),
+          body: JSON.stringify({
+            url: result.data.url,
+            tone: result.data.tone,
+            channel: result.data.channel,
+          }),
         });
         const body: PostResearchResponse = await response
           .json()
@@ -197,7 +207,7 @@ export function HeroInput() {
         </Button>
       </form>
 
-      <div>
+      <div className="flex flex-wrap items-center gap-3">
         <Button
           type="button"
           variant="ghost"
@@ -212,7 +222,114 @@ export function HeroInput() {
           />
           <span className="gradient-text">Try it on Acquisity</span>
         </Button>
+
+        <ChannelToggle value={channel} onChange={setChannel} disabled={isSubmitting} />
+        <ToneToggle value={tone} onChange={setTone} disabled={isSubmitting} />
       </div>
+    </div>
+  );
+}
+
+interface ToneToggleProps {
+  value: ResearchToneT;
+  onChange: (next: ResearchToneT) => void;
+  disabled?: boolean;
+}
+
+const TONE_OPTIONS: ReadonlyArray<{
+  value: ResearchToneT;
+  label: string;
+  hint: string;
+}> = [
+  { value: "cold", label: "Cold", hint: "Short, specific, low-pressure (default)" },
+  { value: "warm", label: "Warm", hint: "Slightly warmer opener — assumes prior context" },
+];
+
+function ToneToggle({ value, onChange, disabled }: ToneToggleProps) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Message tone"
+      className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-1/40 p-0.5 text-sm"
+    >
+      {TONE_OPTIONS.map((opt) => {
+        const selected = opt.value === value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            aria-label={`${opt.label} tone — ${opt.hint}`}
+            title={opt.hint}
+            onClick={() => onChange(opt.value)}
+            disabled={disabled}
+            className={cn(
+              "rounded-full px-3 py-1 font-medium transition-colors duration-200 [transition-timing-function:var(--ease-out)]",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40",
+              selected
+                ? "bg-brand/10 text-foreground shadow-[0_0_0_1px_color-mix(in_oklab,var(--brand)_40%,transparent)]"
+                : "text-muted-foreground hover:text-foreground",
+              disabled && "cursor-not-allowed opacity-50"
+            )}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+interface ChannelToggleProps {
+  value: ResearchChannelT;
+  onChange: (next: ResearchChannelT) => void;
+  disabled?: boolean;
+}
+
+const CHANNEL_OPTIONS: ReadonlyArray<{
+  value: ResearchChannelT;
+  label: string;
+  hint: string;
+}> = [
+  { value: "email", label: "Email", hint: "Cold email with subject line (default)" },
+  { value: "linkedin", label: "LinkedIn", hint: "LinkedIn DM — no subject, ≤80 words" },
+  { value: "x", label: "X", hint: "X DM — no subject, ≤280 chars" },
+];
+
+function ChannelToggle({ value, onChange, disabled }: ChannelToggleProps) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Outreach channel"
+      className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-1/40 p-0.5 text-sm"
+    >
+      <Mail className="ml-2 size-3.5 text-muted-foreground" aria-hidden />
+      {CHANNEL_OPTIONS.map((opt) => {
+        const selected = opt.value === value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            aria-label={`${opt.label} channel — ${opt.hint}`}
+            title={opt.hint}
+            onClick={() => onChange(opt.value)}
+            disabled={disabled}
+            className={cn(
+              "rounded-full px-3 py-1 font-medium transition-colors duration-200 [transition-timing-function:var(--ease-out)]",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40",
+              selected
+                ? "bg-brand/10 text-foreground shadow-[0_0_0_1px_color-mix(in_oklab,var(--brand)_40%,transparent)]"
+                : "text-muted-foreground hover:text-foreground",
+              disabled && "cursor-not-allowed opacity-50"
+            )}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
     </div>
   );
 }

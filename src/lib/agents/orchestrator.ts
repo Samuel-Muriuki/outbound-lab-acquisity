@@ -36,6 +36,8 @@ export interface RunResearchOptions {
   bypassCache?: boolean;
   /** Tone forwarded to Agent 3 — flipped to 'warm' by the regenerate button. */
   tone?: "cold" | "warm";
+  /** Outreach channel — picks Agent 3's prompt branch and output shape. */
+  channel?: "email" | "linkedin" | "x";
 }
 
 /**
@@ -149,7 +151,10 @@ export async function* runResearch(
         people,
         runId,
         stream.emit,
-        { tone: options.tone ?? "cold" }
+        {
+          tone: options.tone ?? "cold",
+          channel: options.channel ?? "email",
+        }
       );
       const a3Duration = Date.now() - a3Start;
       await recordMessage({
