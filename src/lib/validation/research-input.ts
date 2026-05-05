@@ -8,6 +8,7 @@
  * Mirrors the schema in `.ai/docs/06-agent-system-design.md` §9.1.
  */
 import { z } from "zod";
+import { BLOCKED_MESSAGE, containsProfanity } from "./profanity";
 
 /** Hostnames the agent must never fetch from (SSRF + abuse guard). */
 const PRIVATE_HOSTNAMES = new Set([
@@ -69,6 +70,13 @@ export const ResearchInput = z.object({
         return !isPrivateHostname(u.hostname);
       },
       { message: "Cannot research private or local addresses." }
+    )
+    .refine(
+      (value) => {
+        const u = new URL(value);
+        return !containsProfanity(u.hostname);
+      },
+      { message: BLOCKED_MESSAGE }
     ),
 });
 

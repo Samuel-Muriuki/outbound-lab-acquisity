@@ -8,8 +8,7 @@ import { defineConfig, devices } from "@playwright/test";
  *
  * The local dev fallback at http://localhost:3000 is used when:
  * - PLAYWRIGHT_BASE_URL=http://localhost:3000 is set explicitly, or
- * - The default outbound-lab.vercel.app target isn't deployed yet
- *   (early development; switch to production once the Vercel deploy is live)
+ * - The default outbound-lab-acquisity.vercel.app target isn't reachable
  */
 const BASE_URL =
   process.env.E2E_BASE_URL ??
@@ -50,7 +49,7 @@ export default defineConfig({
   /*
    * Auto-start the local dev server when running against localhost
    * and there's no server already responding. CI just sets
-   * E2E_BASE_URL=https://outbound-lab.vercel.app and skips this.
+   * E2E_BASE_URL=https://outbound-lab-acquisity.vercel.app and skips this.
    */
   webServer: BASE_URL.includes("localhost")
     ? {
