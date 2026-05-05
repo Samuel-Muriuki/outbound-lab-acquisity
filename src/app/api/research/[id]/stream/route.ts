@@ -18,6 +18,8 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 interface ExistingRunRow {
   target_url: string;
   status: "pending" | "running" | "done" | "error" | "degraded";
+  tone: "cold" | "warm";
+  channel: "email" | "linkedin" | "x";
 }
 
 /**
@@ -64,7 +66,7 @@ export async function GET(
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from("research_runs")
-      .select("target_url, status, result, error_message")
+      .select("target_url, status, tone, channel, result, error_message")
       .eq("id", id)
       .maybeSingle<
         ExistingRunRow & { result: unknown; error_message: string | null }
@@ -76,7 +78,12 @@ export async function GET(
     if (!data) {
       return NextResponse.json({ error: "Run not found." }, { status: 404 });
     }
-    run = { target_url: data.target_url, status: data.status };
+    run = {
+      target_url: data.target_url,
+      status: data.status,
+      tone: data.tone,
+      channel: data.channel,
+    };
     resultPayload = data.result ?? null;
     errorMessage = data.error_message ?? null;
   } catch (err) {
@@ -120,7 +127,12 @@ export async function GET(
   }
 
   // status === 'pending' — start the orchestrator.
-  return makeSseResponse(() => runResearch(run!.target_url, id));
+  return makeSseResponse(() =>
+    runResearch(run!.target_url, id, {
+      tone: run!.tone,
+      channel: run!.channel,
+    })
+  );
 }
 
 /**

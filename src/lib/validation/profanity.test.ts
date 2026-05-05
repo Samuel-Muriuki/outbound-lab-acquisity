@@ -3,7 +3,7 @@ import { containsProfanity, BLOCKED_MESSAGE } from "./profanity";
 
 describe("containsProfanity", () => {
   it.each([
-    "acquisity.com",
+    "acquisity.ai",
     "github.com",
     "vercel.com",
     "samuel-muriuki.vercel.app",

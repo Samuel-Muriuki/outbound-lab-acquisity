@@ -92,14 +92,34 @@ export const PeopleOutput = z.object({
 export type PeopleOutputT = z.infer<typeof PeopleOutput>;
 
 /**
+ * Channels the user can pick on the landing page. Each picks a different
+ * Agent 3 prompt branch and slightly different output shape (email has a
+ * subject, LinkedIn / X don't). The set is deliberately small — adding
+ * more channels means redesigning the prompt branch and the ResultCard
+ * render path.
+ */
+export const OutreachChannel = z.enum(["email", "linkedin", "x"]);
+export type OutreachChannelT = z.infer<typeof OutreachChannel>;
+
+/**
  * Agent 3 — Personalisation & Outreach
  *
- * The deliverable: one cold email to the first decision maker plus
- * five alternate personalisation hooks. No tools — pure reasoning over
- * Agent 1 + Agent 2's outputs. Temperature 0.7 (vs 0.2 for the
- * factual agents).
+ * The deliverable: one personalised message (email / LinkedIn DM / X DM)
+ * to the first decision maker plus five alternate personalisation hooks.
+ * No tools — pure reasoning over Agent 1 + Agent 2's outputs. Temperature
+ * 0.7 (vs 0.2 for the factual agents).
  *
- * Post-validated by isEmailAcceptable() in agent-3-email.ts — if the
+ * Output shape:
+ *  - email channel: { subject, body, ... } — subject required (5-80 chars)
+ *  - linkedin channel: { subject: null, body, ... } — body ≤ ~80 words
+ *  - x channel: { subject: null, body, ... } — body ≤ 280 chars (prompt cap)
+ *
+ * Zod's `body.max(900)` is generous; per-channel caps are enforced by
+ * the prompt rather than the schema so a slightly-over-cap message
+ * still parses (Llama often runs over by 5-10%) — the UI surfaces the
+ * actual length so the user can edit.
+ *
+ * Post-validated by findForbiddenPhrase() in agent-3-email.ts — if the
  * model leaks any of the forbidden marketing phrases ("hope this email
  * finds you well", "amazing", "game-changing", etc.) the run is retried
  * once and then marked degraded.
@@ -113,16 +133,18 @@ export const EmailOutput = z.object({
     .string()
     .min(5)
     .max(80)
-    .describe("≤80 chars; the prompt instructs ≤50 — Zod is the soft cap."),
+    .nullable()
+    .describe("≤80 chars; null on linkedin / x channels."),
   body: z
     .string()
     .min(50)
     .max(900)
-    .describe("≤900 chars; the prompt instructs ≤120 words."),
+    .describe("≤900 chars; the prompt instructs the per-channel cap."),
   personalisation_hooks: z
     .array(z.string().min(10).max(200))
     .length(5)
     .describe("Exactly 5 alternate one-line opening hooks for variation."),
   tone: z.enum(["cold", "warm"]),
+  channel: OutreachChannel.default("email"),
 });
 export type EmailOutputT = z.infer<typeof EmailOutput>;

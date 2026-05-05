@@ -147,15 +147,42 @@ async function runOnce(
 }
 
 /**
+ * Returns true when a candidate hostname/path slug "looks like" it
+ * contains the person's name. Built for LinkedIn-style slugs like
+ * `linkedin.com/in/jaredpstauffer` where the page text is often a
+ * login/CAPTCHA wall but the URL itself is identifying.
+ *
+ * Rule: tokenise the name on whitespace, drop tokens shorter than 3
+ * chars (handles "de", "la", "von"), strip everything non-alphanumeric
+ * from the URL, and require at least 2 tokens to appear inside it.
+ * For single-token names ("Cher") only 1 match is required.
+ */
+function nameMatchesUrl(name: string, url: string): boolean {
+  const tokens = name
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((t) => t.length >= 3);
+  if (tokens.length === 0) return false;
+  const stripped = url.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const matched = tokens.filter((t) => stripped.includes(t)).length;
+  return matched >= Math.min(2, tokens.length);
+}
+
+/**
  * Post-validation gate per `.ai/docs/06-agent-system-design.md` §9.2.
  *
- * Fetches each decision maker's cited source_url and verifies the name
- * appears (case-insensitive) in the page text. Drops any entry that
- * fails. Returns a new PeopleOutput with the verified entries.
+ * Two-layer verification per decision maker — accept if EITHER:
+ *   1. A name-token-prefix match against `source_url` or `linkedin_url`
+ *      slug (instant, no network), OR
+ *   2. The page text at `source_url` contains the full name
+ *      (slow fallback, only fired when the slug check misses).
+ *
+ * The slug-first path was added because LinkedIn fetches almost always
+ * return a sign-in / CAPTCHA wall under our UA, so fetching them and
+ * grep'ing for the name was dropping legitimate people.
  *
  * Failures here aren't agent retries — the agent did its work; we're
- * simply auditing the citations. If the page is unreachable we drop
- * the entry rather than retrying.
+ * simply auditing the citations.
  */
 async function validateDecisionMakers(
   people: PeopleOutputT,
@@ -163,6 +190,15 @@ async function validateDecisionMakers(
 ): Promise<PeopleOutputT> {
   const verified = await Promise.all(
     people.decision_makers.map(async (dm) => {
+      // Fast path: URL-slug match on either cited source or LinkedIn url.
+      if (
+        nameMatchesUrl(dm.name, dm.source_url) ||
+        (dm.linkedin_url && nameMatchesUrl(dm.name, dm.linkedin_url))
+      ) {
+        return dm;
+      }
+
+      // Fallback: fetch the page and look for the name in its body.
       try {
         const content = await webFetchTool.execute({ url: dm.source_url });
         if (content.toLowerCase().includes(dm.name.toLowerCase())) {
@@ -171,7 +207,7 @@ async function validateDecisionMakers(
         emit({
           type: "agent_thinking",
           agent: 2,
-          delta: `Dropping "${dm.name}" — name not found at ${dm.source_url}.`,
+          delta: `Dropping "${dm.name}" — name not found in ${dm.source_url} body or slug.`,
         });
         return null;
       } catch (err) {

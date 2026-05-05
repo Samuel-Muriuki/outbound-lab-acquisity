@@ -25,7 +25,7 @@ const RECON_BRIEF: ReconnaissanceOutputT = {
     "B2B sales teams at AI-product companies, especially startups under 200 people.",
   company_size_estimate: "20-50 employees",
   recent_signals: [],
-  sources: ["https://acquisity.com"],
+  sources: ["https://acquisity.ai"],
 };
 
 const PEOPLE: PeopleOutputT = {
@@ -34,7 +34,7 @@ const PEOPLE: PeopleOutputT = {
       name: "Tasnim A.",
       role: "Global TA & People Experience Leader",
       why_them: "Owns TA hiring strategy at Acquisity.",
-      source_url: "https://acquisity.com/team",
+      source_url: "https://acquisity.ai/team",
       linkedin_url: null,
     },
   ],
@@ -55,6 +55,7 @@ const VALID_EMAIL = {
     "Recent funding round signals scaling intent.",
   ],
   tone: "cold" as const,
+  channel: "email" as const,
 };
 
 const FORBIDDEN_EMAIL = {

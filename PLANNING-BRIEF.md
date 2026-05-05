@@ -67,7 +67,7 @@ She receives a LinkedIn DM with one link.
 
 1. Clicks `outbound-lab-acquisity.vercel.app`
 2. Lands on a clean dark-themed landing page. Hero CTA: **"Try it on Acquisity."**
-3. Clicks that CTA. URL pre-fills as `acquisity.com`.
+3. Clicks that CTA. URL pre-fills as `acquisity.ai`.
 4. Watches in real time as the agent narrates: *"Researching Acquisity... found their site... reading product page... identifying ICP... finding decision makers..."*
 5. After ~30-45 seconds, sees a clean results card with: company brief, ICP summary, top 3 decision makers (one of whom should be Tasnim if the Niche Researcher works), 5 personalisation hooks, and a draft outreach email.
 6. The footer says: *"Built by Samuel Muriuki. Read the README →"* (link to GitHub).
@@ -127,7 +127,7 @@ This is the test — if a real salesperson finds the email good enough to send, 
 │  templated.                                              │
 │                                                          │
 │  ┌─────────────────────────────┐ ┌──────────────────┐    │
-│  │ https://acquisity.com       │ │   Research →     │    │
+│  │ https://acquisity.ai       │ │   Research →     │    │
 │  └─────────────────────────────┘ └──────────────────┘    │
 │                                                          │
 │  ▸ Try it on Acquisity     ▸ See past runs               │
@@ -145,13 +145,13 @@ This is the screen the CTO will spend the most time on. It must look like Cursor
 │ ← Back     OutboundLab                          Share ⤴  │
 ├──────────────────────────────────────────────────────────┤
 │                                                          │
-│  Researching: acquisity.com                              │
+│  Researching: acquisity.ai                              │
 │  ─────────────────────────────────────────               │
 │                                                          │
 │  ▸ AGENT 1 — Reconnaissance              ✓ 4.2s          │
 │     ↪ web_search("acquisity B2B AI growth platform")    │
 │       returned 8 results                                 │
-│     ↪ web_fetch("https://acquisity.com/about")          │
+│     ↪ web_fetch("https://acquisity.ai/about")          │
 │       returned 1,247 words                               │
 │     ↪ Decision: B2B SaaS, ~20 employees, AI agents for  │
 │       sales and marketing automation.                    │
@@ -598,8 +598,8 @@ This must be free or near-free. The whole project should run on free tiers.
 | Server Action `/api/research` | Validates URL, creates run row, returns run_id | ✨ feat(api): research Server Action with URL validation |
 | OpenAI SDK (Groq compatible) + Gemini SDK integration | One test call returns sample response | ✨ feat(ai): OpenAI SDK (Groq compatible) + Gemini SDK client and tool-use harness |
 | Tavily search tool | Tool function returns structured results | ✨ feat(tools): Tavily search wrapper with typed results |
-| Agent 1 (Reconnaissance) | Returns valid JSON for `acquisity.com` | ✨ feat(agents): Reconnaissance agent with web_search and web_fetch tools |
-| Agent 2 (People & ICP) | Returns 3 decision makers for `acquisity.com` | ✨ feat(agents): People and ICP agent |
+| Agent 1 (Reconnaissance) | Returns valid JSON for `acquisity.ai` | ✨ feat(agents): Reconnaissance agent with web_search and web_fetch tools |
+| Agent 2 (People & ICP) | Returns 3 decision makers for `acquisity.ai` | ✨ feat(agents): People and ICP agent |
 | Agent 3 (Personalisation) | Returns valid email JSON | ✨ feat(agents): Personalisation and outreach agent |
 | Orchestrator | Runs all 3 agents in sequence, persists results | ✨ feat(orchestrator): sequential agent execution with persistence |
 | Streaming UI | Shows progress as agents run | ✨ feat(streaming): server-sent events for agent progress |

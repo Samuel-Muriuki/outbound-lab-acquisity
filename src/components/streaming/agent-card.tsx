@@ -59,7 +59,7 @@ export function AgentCard({ index, state }: AgentCardProps) {
     <article
       data-agent-status={status}
       className={cn(
-        "rounded-xl border bg-surface-1 p-5 transition-all duration-300 [transition-timing-function:var(--ease-out)]",
+        "glass-card rounded-xl border p-5 transition-all duration-300 [transition-timing-function:var(--ease-out)]",
         status === "pending" && "border-border opacity-60",
         status === "running" &&
           (descriptor.accent === "agent-1"

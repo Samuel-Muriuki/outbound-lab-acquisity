@@ -23,7 +23,7 @@ const RECON: ReconnaissanceOutputT = {
   target_market: "B2B sales teams at AI-product companies under 200 people.",
   company_size_estimate: "20-50 employees",
   recent_signals: [],
-  sources: ["https://acquisity.com"],
+  sources: ["https://acquisity.ai"],
 };
 
 const PEOPLE: PeopleOutputT = {
@@ -32,7 +32,7 @@ const PEOPLE: PeopleOutputT = {
       name: "Tasnim A.",
       role: "Global TA Leader",
       why_them: "Owns hiring strategy at Acquisity.",
-      source_url: "https://acquisity.com/team",
+      source_url: "https://acquisity.ai/team",
       linkedin_url: null,
     },
   ],
@@ -53,6 +53,7 @@ const EMAIL = {
     "Acquisity targets B2B sales teams at AI-product companies.",
   ],
   tone: "cold" as const,
+  channel: "email" as const,
 };
 
 // ---- Mocks ----
@@ -115,13 +116,13 @@ describe("runResearch() — orchestrator", () => {
   it("short-circuits on cache hit (no agents called)", async () => {
     findCachedRunMock.mockResolvedValueOnce({
       id: "cached-run-id",
-      target_url: "https://acquisity.com",
-      target_domain: "acquisity.com",
+      target_url: "https://acquisity.ai",
+      target_domain: "acquisity.ai",
       result: { recon: RECON, people: PEOPLE, email: EMAIL },
       completed_at: new Date().toISOString(),
     });
 
-    const events = await collect(runResearch("https://acquisity.com", "run-id"));
+    const events = await collect(runResearch("https://acquisity.ai", "run-id"));
 
     const types = events.map((e) => e.type);
     expect(types).toEqual(["cache_hit", "final_result"]);
@@ -153,7 +154,7 @@ describe("runResearch() — orchestrator", () => {
       forbiddenReason: null,
     } satisfies Agent3Result);
 
-    const events = await collect(runResearch("https://acquisity.com", "run-id"));
+    const events = await collect(runResearch("https://acquisity.ai", "run-id"));
 
     const types = events.map((e) => e.type);
     expect(types).toEqual([
@@ -192,7 +193,7 @@ describe("runResearch() — orchestrator", () => {
       forbiddenReason: '"hope this email finds you well" cliche',
     } satisfies Agent3Result);
 
-    const events = await collect(runResearch("https://acquisity.com", "run-id"));
+    const events = await collect(runResearch("https://acquisity.ai", "run-id"));
 
     expect(degradeRunMock).toHaveBeenCalledOnce();
     expect(completeRunMock).not.toHaveBeenCalled();
@@ -205,7 +206,7 @@ describe("runResearch() — orchestrator", () => {
   it("emits an error event and marks run failed when an agent throws", async () => {
     runAgent1Mock.mockRejectedValueOnce(new Error("Boom — agent 1 broke"));
 
-    const events = await collect(runResearch("https://acquisity.com", "run-id"));
+    const events = await collect(runResearch("https://acquisity.ai", "run-id"));
 
     const errorEvent = events.find((e) => e.type === "error");
     expect(errorEvent).toMatchObject({
@@ -228,7 +229,7 @@ describe("runResearch() — orchestrator", () => {
     });
 
     await collect(
-      runResearch("https://acquisity.com", "run-id", { bypassCache: true })
+      runResearch("https://acquisity.ai", "run-id", { bypassCache: true })
     );
     expect(findCachedRunMock).not.toHaveBeenCalled();
     expect(runAgent1Mock).toHaveBeenCalledOnce();
@@ -244,7 +245,7 @@ describe("runResearch() — orchestrator", () => {
     });
 
     await collect(
-      runResearch("https://acquisity.com", "run-id", { tone: "warm" })
+      runResearch("https://acquisity.ai", "run-id", { tone: "warm" })
     );
     expect(runAgent3Mock).toHaveBeenCalledOnce();
     const a3Call = runAgent3Mock.mock.calls[0]!;
@@ -256,7 +257,7 @@ describe("runResearch() — orchestrator", () => {
     // Set up a slow Agent 1 that emits 2 tool_calls before resolving
     runAgent1Mock.mockImplementationOnce(
       async (_url, _runId, emit: (e: StreamEvent) => void) => {
-        emit({ type: "tool_call", agent: 1, tool: "web_fetch", input: { url: "https://acquisity.com" } });
+        emit({ type: "tool_call", agent: 1, tool: "web_fetch", input: { url: "https://acquisity.ai" } });
         emit({
           type: "tool_result",
           agent: 1,
@@ -273,7 +274,7 @@ describe("runResearch() — orchestrator", () => {
       forbiddenReason: null,
     });
 
-    const events = await collect(runResearch("https://acquisity.com", "run-id"));
+    const events = await collect(runResearch("https://acquisity.ai", "run-id"));
     const types = events.map((e) => e.type);
 
     // Agent 1's tool_call + tool_result must appear BEFORE agent_done(1)

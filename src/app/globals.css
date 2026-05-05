@@ -219,6 +219,78 @@
   background: linear-gradient(135deg, #22D3EE 0%, #3B82F6 100%);
 }
 
+/* ============================================
+ * Text shimmer
+ * ============================================
+ * Periodic gradient sweep across hero text — quiet, occasional, never
+ * looping fast. The sweep itself is 1.6s of motion; the rest of the
+ * 14s cycle the text sits idle in foreground colour. Forced to one
+ * colour stop at a time via background-size:200% + animated
+ * background-position so accessibility tools still see the underlying
+ * text.
+ *
+ * Apply with .shimmer-text on any element. prefers-reduced-motion is
+ * already covered globally — the animation flattens to a single frame.
+ */
+.shimmer-text {
+  background-image: linear-gradient(
+    90deg,
+    var(--foreground) 0%,
+    var(--foreground) 38%,
+    color-mix(in oklab, var(--brand-secondary) 90%, var(--foreground)) 50%,
+    var(--foreground) 62%,
+    var(--foreground) 100%
+  );
+  background-size: 220% 100%;
+  background-position: 100% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer-sweep 14s linear infinite;
+}
+
+@keyframes shimmer-sweep {
+  0%   { background-position: 200% 0; }
+  10%  { background-position: 200% 0; }
+  20%  { background-position: -120% 0; }
+  100% { background-position: -120% 0; }
+}
+
+/* ============================================
+ * Glass surfaces
+ * ============================================
+ * Translucent + backdrop-blur for cards that sit over the
+ * InteractiveBackground (landing, streaming view). Keep the blur subtle
+ * — strong blur reads as iOS-skeuomorphism; the brand voice wants quiet.
+ *
+ * Both themes get a tuned bg / border pair. In dark, the bg is the
+ * existing zinc-900 surface dropped to ~62% with a 1px white-foreground
+ * highlight on the top edge. In light, the same pattern but reversed
+ * (translucent white over the page bg).
+ *
+ * Cards that need to *fully* obscure their backdrop should keep the
+ * opaque bg-surface-1 / bg-card classes; this is opt-in only.
+ */
+.glass-card {
+  background: color-mix(in oklab, var(--surface-1) 62%, transparent);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border-color: color-mix(in oklab, var(--foreground) 8%, transparent);
+}
+
+.dark .glass-card {
+  /* Subtle inner top highlight to suggest a light source above. */
+  box-shadow: inset 0 1px 0 0 color-mix(in oklab, var(--foreground) 6%, transparent);
+}
+
+/* Browsers without backdrop-filter (older Firefox, some embedded webviews):
+ * fall back to the opaque surface so contrast is never broken. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass-card {
+    background: var(--surface-1);
+  }
+}
+
 .agent-glow-1 {
   box-shadow:
     0 0 0 1px rgba(34, 197, 94, 0.4),
@@ -253,4 +325,95 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* ============================================
+ * Interactive background — spotlight variant
+ * ============================================
+ * Cursor-following radial gradient + click ripples. Driven by
+ * --mx / --my / --rx / --ry / --mv CSS custom properties set from JS by
+ * <InteractiveBackground variant="spotlight"> in
+ * src/components/interactive-background.tsx.
+ *
+ * --mv (motion velocity) is 0-1; multiplies the inner alpha and the
+ * radius so a fast cursor blooms brighter and wider, while an idle
+ * cursor decays to a faint baseline glow.
+ */
+.spotlight-bg {
+  background:
+    radial-gradient(
+      calc(560px + 220px * var(--mv, 0)) circle at var(--mx, 50vw) var(--my, 50vh),
+      hsl(217 91% 60% / calc(0.05 + 0.18 * var(--mv, 0))),
+      hsl(199 89% 60% / calc(0.03 + 0.08 * var(--mv, 0))) 30%,
+      transparent 70%
+    );
+  transition: background 80ms linear;
+}
+
+.spotlight-ripple {
+  position: absolute;
+  left: var(--rx, 50%);
+  top: var(--ry, 50%);
+  width: 0;
+  height: 0;
+  border-radius: 9999px;
+  transform: translate(-50%, -50%);
+  border: 1px solid hsl(217 91% 60% / 0.6);
+  pointer-events: none;
+  opacity: 0;
+}
+.spotlight-ripple[data-state="on"] {
+  animation: spotlight-ripple-out 700ms ease-out forwards;
+}
+@keyframes spotlight-ripple-out {
+  0%   { width: 0; height: 0; opacity: 0.6; border-width: 2px; }
+  100% { width: 240px; height: 240px; opacity: 0; border-width: 1px; }
+}
+
+/* ============================================
+ * Interactive background — aurora variant
+ * ============================================
+ * Three slow-drifting blobs, no JS / no listeners. Used on the
+ * streaming view where a cursor follower would compete with the
+ * tool-call timeline.
+ */
+.aurora-blob {
+  position: absolute;
+  width: 60vmax;
+  height: 60vmax;
+  border-radius: 9999px;
+  filter: blur(80px);
+  opacity: 0.18;
+  pointer-events: none;
+  will-change: transform;
+}
+.aurora-blob-1 {
+  background: radial-gradient(circle, hsl(217 91% 60%), transparent 70%);
+  top: -20vmax;
+  left: -20vmax;
+  animation: aurora-drift-1 24s ease-in-out infinite;
+}
+.aurora-blob-2 {
+  background: radial-gradient(circle, hsl(199 89% 60%), transparent 70%);
+  bottom: -20vmax;
+  right: -20vmax;
+  animation: aurora-drift-2 30s ease-in-out infinite;
+}
+.aurora-blob-3 {
+  background: radial-gradient(circle, hsl(263 70% 60%), transparent 70%);
+  top: 30vmax;
+  left: 40vmax;
+  animation: aurora-drift-3 36s ease-in-out infinite;
+}
+@keyframes aurora-drift-1 {
+  0%, 100% { transform: translate(0, 0); }
+  50%      { transform: translate(20vmax, 10vmax); }
+}
+@keyframes aurora-drift-2 {
+  0%, 100% { transform: translate(0, 0); }
+  50%      { transform: translate(-20vmax, -10vmax); }
+}
+@keyframes aurora-drift-3 {
+  0%, 100% { transform: translate(0, 0); }
+  50%      { transform: translate(10vmax, -20vmax); }
 }

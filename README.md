@@ -1,5 +1,6 @@
 # OutboundLab
 
+<a href="https://github.com/Samuel-Muriuki/outbound-lab-acquisity/actions/workflows/ci.yml"><img src="https://github.com/Samuel-Muriuki/outbound-lab-acquisity/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI status" /></a>
 <a href="https://www.buymeacoffee.com/elsamm"><img src="https://img.shields.io/badge/Buy_Me_a_Coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy Me a Coffee" /></a>
 
 > Multi-agent B2B research, on demand. Paste any company URL — get a personalised outreach package in under a minute.
@@ -129,7 +130,12 @@ pnpm test:e2e        # Playwright against E2E_BASE_URL
 
 The Playwright spec runs against the production URL by default. Set `E2E_BASE_URL` to override.
 
-Current state: **76 unit tests pass** in ~700 ms (LLM provider chain, both tools, all three agents, orchestrator, forbidden-phrase gate, hostname moderation). 1 integration test against `acquisity.com` runs end-to-end on real Groq + Tavily and is auto-skipped without keys.
+Current state: **77 unit tests pass** in ~700 ms (LLM provider chain, both tools, all three agents, orchestrator, forbidden-phrase gate, hostname moderation, two-layer Agent 2 post-validation). 1 integration test against `acquisity.ai` runs end-to-end on real Groq + Tavily and is auto-skipped without keys.
+
+## CI / CD
+
+- **CI:** [GitHub Actions workflow](./.github/workflows/ci.yml) runs `pnpm typecheck` + `pnpm lint` + `pnpm test` + `pnpm build` on every push to `develop` / `main` and on every PR. Concurrency-gated so rapid pushes cancel earlier runs (saves runner minutes). Free for public repos.
+- **CD:** Vercel auto-deploys `main` to production. Preview deploys are intentionally **disabled** at the project level to keep build minutes inside the Hobby tier — feature branches rely on local + the CI workflow for feedback.
 
 ## Project status
 
@@ -170,6 +176,6 @@ MIT
 
 ---
 
-Built for the [Acquisity](https://acquisity.com) Senior Full-Stack Engineer (Next.js / AI) application — May 2026.
+Built for the [Acquisity](https://www.acquisity.ai/) Senior Full-Stack Engineer (Next.js / AI) application — May 2026.
 
 <a href="https://www.buymeacoffee.com/elsamm"><img src="https://img.shields.io/badge/Buy_Me_a_Coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy Me a Coffee" /></a>

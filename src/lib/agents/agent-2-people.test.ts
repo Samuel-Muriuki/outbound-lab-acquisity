@@ -22,7 +22,7 @@ const RECON_BRIEF: ReconnaissanceOutputT = {
     "B2B sales teams at AI-product companies, especially startups under 200 people.",
   company_size_estimate: "20-50 employees",
   recent_signals: [],
-  sources: ["https://acquisity.com"],
+  sources: ["https://acquisity.ai"],
 };
 
 const VALID_OUTPUT = {
@@ -31,7 +31,7 @@ const VALID_OUTPUT = {
       name: "Tasnim A.",
       role: "Global TA & People Experience Leader",
       why_them: "Owns TA hiring strategy at Acquisity; would directly evaluate this kind of pitch.",
-      source_url: "https://acquisity.com/team",
+      source_url: "https://acquisity.ai/team",
       linkedin_url: "https://linkedin.com/in/tasnim-a",
     },
   ],
@@ -102,23 +102,52 @@ afterEach(() => {
 });
 
 describe("runAgent2()", () => {
-  it("returns a Zod-validated PeopleOutput when the agent + post-validation succeed", async () => {
+  it("returns a Zod-validated PeopleOutput when the LinkedIn slug matches (no fetch needed)", async () => {
     chatMock.mockResolvedValueOnce(
       makeChatResult({ text: JSON.stringify(VALID_OUTPUT) })
     );
-    // Page content includes the name → kept
-    webFetchExecute.mockResolvedValue("Tasnim A. is the Global TA Leader at Acquisity.");
+    // VALID_OUTPUT.linkedin_url is `https://linkedin.com/in/tasnim-a` —
+    // its slug contains "tasnim" so the fast-path validates without
+    // ever fetching the source page. Mock fetch to make sure it's NOT
+    // called.
 
     const { emit, events } = captureEvents();
     const out = await runAgent2(RECON_BRIEF, "run-id", emit);
     expect(out.decision_makers).toHaveLength(1);
     expect(out.decision_makers[0]!.name).toBe("Tasnim A.");
-    // post-validation calls webFetch on the source_url
-    expect(webFetchExecute).toHaveBeenCalledWith({
-      url: "https://acquisity.com/team",
-    });
-    // provider_used emitted
+    expect(webFetchExecute).not.toHaveBeenCalled();
     expect(events.find((e) => e.type === "provider_used")).toBeDefined();
+  });
+
+  it("falls back to source_url fetch when neither URL slug matches the name", async () => {
+    // Name + URLs that won't pass the slug check, so fetch IS the gate.
+    chatMock.mockResolvedValueOnce(
+      makeChatResult({
+        text: JSON.stringify({
+          ...VALID_OUTPUT,
+          decision_makers: [
+            {
+              name: "Marcus Reed",
+              role: "Head of Sales",
+              why_them: "Owns sales hiring strategy at Acquisity.",
+              source_url: "https://acquisity.ai/team",
+              linkedin_url: null,
+            },
+          ],
+        }),
+      })
+    );
+    // Page content includes the name → kept via the fallback fetch path.
+    webFetchExecute.mockResolvedValue(
+      "Marcus Reed is the Head of Sales at Acquisity."
+    );
+
+    const { emit } = captureEvents();
+    const out = await runAgent2(RECON_BRIEF, "run-id", emit);
+    expect(out.decision_makers).toHaveLength(1);
+    expect(webFetchExecute).toHaveBeenCalledWith({
+      url: "https://acquisity.ai/team",
+    });
   });
 
   it("drops a decision maker whose name does not appear in the source URL", async () => {
@@ -132,7 +161,7 @@ describe("runAgent2()", () => {
               name: "Made Up Person",
               role: "VP Imaginary",
               why_them: "Fabricated by the model — should be dropped by validation.",
-              source_url: "https://acquisity.com/team",
+              source_url: "https://acquisity.ai/team",
               linkedin_url: null,
             },
           ],
@@ -154,11 +183,28 @@ describe("runAgent2()", () => {
     expect(dropMessage).toBeDefined();
   });
 
-  it("drops a decision maker when the source URL fetch fails", async () => {
+  it("drops a decision maker when neither slug matches AND fetch fails", async () => {
+    // Use a name whose tokens won't match either URL's slug, then make
+    // the fetch throw — both validation paths fail, dm is dropped.
     chatMock.mockResolvedValueOnce(
-      makeChatResult({ text: JSON.stringify(VALID_OUTPUT) })
+      makeChatResult({
+        text: JSON.stringify({
+          ...VALID_OUTPUT,
+          decision_makers: [
+            {
+              name: "Marcus Reed",
+              role: "VP Imaginary",
+              why_them: "Won't survive validation — fetch will throw.",
+              source_url: "https://acquisity.ai/team",
+              linkedin_url: null,
+            },
+          ],
+        }),
+      })
     );
-    webFetchExecute.mockRejectedValue(new Error("Could not fetch private or local addresses (192.168.0.1)."));
+    webFetchExecute.mockRejectedValue(
+      new Error("Could not fetch private or local addresses (192.168.0.1).")
+    );
 
     const { emit, events } = captureEvents();
     const out = await runAgent2(RECON_BRIEF, "run-id", emit);

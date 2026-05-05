@@ -2,11 +2,14 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { ArrowLeft, AlertCircle, Zap } from "lucide-react";
+import { ArrowLeft, AlertCircle, X, Zap } from "lucide-react";
 import {
   useResearchStream,
   type UseResearchStreamArgs,
 } from "@/hooks/use-research-stream";
+import { DeleteRunButton } from "@/components/delete-run-button";
+import { DotFieldBackground } from "@/components/backgrounds/dot-field-background";
+import { TiltedWrapper } from "@/components/tilted-wrapper";
 import { AgentTimeline } from "./agent-timeline";
 import { ResultCard } from "./result-card";
 
@@ -18,6 +21,8 @@ export interface ResearchViewProps {
   initialError?: UseResearchStreamArgs["initialError"];
   /** Provided when the run was served from cache — drives the "served from cache" banner. */
   cacheSourceCompletedAt?: string | null;
+  /** True when the visitor's session cookie matches this run's creator. */
+  isOwner?: boolean;
 }
 
 /**
@@ -37,6 +42,7 @@ export function ResearchView({
   initialResult = null,
   initialError = null,
   cacheSourceCompletedAt = null,
+  isOwner = false,
 }: ResearchViewProps) {
   const stream = useResearchStream({
     runId,
@@ -60,6 +66,21 @@ export function ResearchView({
   const isCacheHit =
     cacheSourceCompletedAt !== null || stream.cacheSourceRunId !== null;
 
+  // While the EventSource is open the user might want to abort. Navigating
+  // home unmounts this view, which triggers the hook's cleanup and closes
+  // the stream client-side. (The orchestrator on the server keeps churning
+  // until the run completes — full server-side cancellation needs a
+  // `cancelled` status enum + abort signal plumbing through the agents
+  // and is left for a follow-up PR.)
+  const isInFlight =
+    stream.status === "connecting" || stream.status === "streaming";
+  // Show the delete button only when the run is finished AND the visitor
+  // is the original creator. The DELETE endpoint validates the cookie
+  // server-side regardless — this is a UX gate.
+  const canDelete =
+    isOwner &&
+    (stream.status === "done" || stream.status === "error" || initialStatus === "degraded");
+
   const provider = stream.agents[1].provider ?? stream.agents[2].provider ?? stream.agents[3].provider;
   const totalDuration =
     (stream.agents[1].durationMs ?? 0) +
@@ -67,22 +88,36 @@ export function ResearchView({
     (stream.agents[3].durationMs ?? 0);
 
   return (
-    <main
-      id="main"
-      className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-12 sm:px-6 lg:px-8"
-    >
+    <>
+      <DotFieldBackground />
+      <main
+        id="main"
+        className="relative z-10 mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-12 sm:px-6 lg:px-8"
+      >
       <header className="flex items-center justify-between gap-4">
         <Link
           href="/"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          className={
+            isInFlight
+              ? "inline-flex items-center gap-1.5 text-sm font-medium text-error transition-colors hover:text-error/80"
+              : "inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          }
         >
-          <ArrowLeft className="size-4" aria-hidden />
-          Back
+          {isInFlight ? (
+            <>
+              <X className="size-4" aria-hidden />
+              Cancel
+            </>
+          ) : (
+            <>
+              <ArrowLeft className="size-4" aria-hidden />
+              Back
+            </>
+          )}
         </Link>
-        <span className="flex items-center gap-2 text-sm">
-          <span className="size-2 rounded-full gradient-bg" aria-hidden />
-          <span className="font-medium tracking-tight">OutboundLab</span>
-        </span>
+        {canDelete && (
+          <DeleteRunButton runId={runId} onDeleted="home" variant="with-label" />
+        )}
       </header>
 
       <section className="mt-12">
@@ -155,10 +190,41 @@ export function ResearchView({
       )}
 
       {stream.status === "done" && stream.result && (
-        <section className="mt-10">
-          <ResultCard result={stream.result} />
-        </section>
+        <ResultSection result={stream.result} />
       )}
-    </main>
+      </main>
+    </>
+  );
+}
+
+/**
+ * Wraps the ResultCard with an effect that scrolls itself into view the
+ * first time it mounts, so visitors are taken straight to the
+ * deliverable when the run finishes (rather than having to scroll past
+ * the agent timeline manually).
+ */
+function ResultSection({ result }: { result: NonNullable<ReturnType<typeof useResearchStream>["result"]> }) {
+  const sectionRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const node = sectionRef.current;
+    if (!node) return;
+    const reduced = typeof window !== "undefined"
+      && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    node.scrollIntoView({
+      behavior: reduced ? "auto" : "smooth",
+      block: "start",
+    });
+  }, []);
+
+  // ResultCard is the page's centerpiece — keep the tilt very mild
+  // (rotateAmplitude=3) so it whispers rather than waves around while
+  // the visitor is reading the email body or clicking tabs.
+  return (
+    <section ref={sectionRef} className="mt-10 scroll-mt-12">
+      <TiltedWrapper rotateAmplitude={3} scaleOnHover={1.005}>
+        <ResultCard result={result} />
+      </TiltedWrapper>
+    </section>
   );
 }

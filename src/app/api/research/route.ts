@@ -5,6 +5,7 @@ import {
 } from "@/lib/validation/research-input";
 import { BLOCKED_MESSAGE } from "@/lib/validation/profanity";
 import { isFamilyDnsBlocked } from "@/lib/validation/family-dns";
+import { getOrCreateSessionId } from "@/lib/session/cookie";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -57,7 +58,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { url } = parsed.data;
+  const { url, tone, channel } = parsed.data;
   const target_domain = normaliseDomain(url);
 
   // Cloudflare Family DNS gate — catches NSFW brand domains (onlyfans,
@@ -88,12 +89,17 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const sessionId = await getOrCreateSessionId();
+
   const { data, error } = await supabase
     .from("research_runs")
     .insert({
       target_url: url,
       target_domain,
       status: "pending",
+      creator_session_id: sessionId,
+      tone,
+      channel,
     })
     .select("id")
     .single();

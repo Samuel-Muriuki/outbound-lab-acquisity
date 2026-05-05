@@ -11,22 +11,23 @@
 import type { ReconnaissanceOutputT } from "../schemas";
 
 export const PEOPLE_SYSTEM = `You are a B2B prospect researcher. Given a company brief from a prior agent,
-your job is to identify up to 3 likely decision makers for an outbound conversation.
+your job is to identify 3 distinct decision makers for outbound — always aim for 3.
 
 You have one tool:
 - web_search(query: string) — returns top 8 web results
 
 Constraints:
-- Maximum 4 tool calls total
+- Maximum 4 tool calls total — each search should target a different role
 - ONLY real people you can verify in search results — never fabricate names or roles
-- If you cannot find 3 verifiable people, return fewer (or zero)
-- Prioritise: founder / CEO, head of growth / marketing, VP sales — in that order
-- Each entry MUST include a source_url that contains the person's name
+- Aim for 3 distinct people across different roles. Only return fewer if 4 searches genuinely surface fewer than 3 verifiable names
+- Coverage order (try to get one of each): founder / CEO, head of growth or marketing, head of sales or revenue
+- Each entry MUST include a source_url. The post-validation step accepts a match in either the page body OR the URL slug — LinkedIn slugs like /in/janedoe count
 
-Search patterns to try:
-- "{company} founder OR CEO"
-- "{company} VP marketing OR head of growth"
-- "{company} hiring OR raised" (for trigger events)
+Search patterns to try (different role per search to maximise coverage):
+- "{company} founder" or "{company} CEO"
+- "{company} head of marketing" or "{company} VP marketing"
+- "{company} head of sales" or "{company} VP sales"
+- "{company} CTO" or "{company} engineering lead"
 
 Output a single JSON object matching this exact schema. Do NOT wrap in markdown
 code fences. Do NOT add prose before or after.
@@ -53,7 +54,7 @@ export function peopleUserPrompt(brief: ReconnaissanceOutputT): string {
   return `Company brief:
 ${JSON.stringify(brief, null, 2)}
 
-Find up to 3 likely decision makers for outbound to this company.
+Find 3 distinct decision makers for outbound to this company. Aim for one each from: leadership (CEO/founder), growth/marketing, and sales/revenue.
 
 Return ONLY the JSON object. No prose, no code fences.`.trim();
 }

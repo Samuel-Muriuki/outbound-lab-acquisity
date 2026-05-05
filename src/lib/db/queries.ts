@@ -66,6 +66,8 @@ export interface RecentRunRow {
   duration_ms: number | null;
   decision_maker_count: number;
   completed_at: string;
+  /** Cookie-derived session id of the visitor who created this run. */
+  creator_session_id: string | null;
 }
 
 /**
@@ -91,7 +93,9 @@ export async function getRecentRuns(limit: number): Promise<RecentRunRow[]> {
 
   const { data, error } = await supabase
     .from("research_runs")
-    .select("id, target_domain, result, duration_ms, completed_at")
+    .select(
+      "id, target_domain, result, duration_ms, completed_at, creator_session_id"
+    )
     .in("status", ["done", "degraded"])
     .not("result", "is", null)
     .order("completed_at", { ascending: false })
@@ -118,8 +122,202 @@ export async function getRecentRuns(limit: number): Promise<RecentRunRow[]> {
       duration_ms: (row.duration_ms as number | null) ?? null,
       decision_maker_count: result?.people?.decision_makers?.length ?? 0,
       completed_at: row.completed_at as string,
+      creator_session_id: (row.creator_session_id as string | null) ?? null,
     };
   });
+}
+
+export interface InFlightRunRow {
+  id: string;
+  target_domain: string;
+  status: "pending" | "running";
+  started_at: string;
+}
+
+/**
+ * Pending + running rows belonging to the current visitor's session.
+ * Powers the "still working" banner on the home page so a visitor who
+ * navigates back mid-run can see + click straight back to the
+ * streaming view rather than thinking the run was lost.
+ *
+ * Cookie-scoped via `creator_session_id` so other visitors never see
+ * each other's in-flight work.
+ *
+ * Returns an empty array silently on any DB / config error — the
+ * banner is a best-effort affordance, never a blocker.
+ */
+export async function getInFlightRunsForSession(
+  sessionId: string,
+  limit = 5
+): Promise<InFlightRunRow[]> {
+  if (!sessionId) return [];
+  let supabase;
+  try {
+    supabase = getSupabaseAdmin();
+  } catch {
+    return [];
+  }
+  const { data, error } = await supabase
+    .from("research_runs")
+    .select("id, target_domain, status, started_at")
+    .in("status", ["pending", "running"])
+    .eq("creator_session_id", sessionId)
+    .order("started_at", { ascending: false })
+    .limit(limit);
+
+  if (error || !data) {
+    if (error) {
+      console.warn("[getInFlightRunsForSession] Supabase error:", error.message);
+    }
+    return [];
+  }
+
+  return data.map(
+    (row): InFlightRunRow => ({
+      id: row.id as string,
+      target_domain: row.target_domain as string,
+      status: row.status as InFlightRunRow["status"],
+      started_at: row.started_at as string,
+    })
+  );
+}
+
+export interface SearchRunsArgs {
+  /** Free-text query — matches target_domain or recon.company_name (case-insensitive substring). */
+  query?: string;
+  /** Page size, capped at 50 server-side regardless of input. */
+  limit: number;
+  /** Offset in completed_at-DESC order. */
+  offset: number;
+}
+
+export interface SearchRunsResult {
+  runs: RecentRunRow[];
+  /** Total number of rows matching the filter — drives pagination UI. */
+  total: number;
+}
+
+/**
+ * Searchable, paginated list of successful runs for the /runs page.
+ *
+ * Query semantics (case-insensitive substring against target_domain).
+ * If the query is empty, returns all runs. Limit is clamped to [1, 50]
+ * to keep payloads modest (each row carries the full result JSONB).
+ */
+export async function searchRuns(args: SearchRunsArgs): Promise<SearchRunsResult> {
+  let supabase;
+  try {
+    supabase = getSupabaseAdmin();
+  } catch {
+    return { runs: [], total: 0 };
+  }
+
+  const limit = Math.max(1, Math.min(args.limit, 50));
+  const offset = Math.max(0, args.offset);
+  const trimmed = args.query?.trim() ?? "";
+
+  let countQuery = supabase
+    .from("research_runs")
+    .select("id", { count: "exact", head: true })
+    .in("status", ["done", "degraded"])
+    .not("result", "is", null);
+
+  let dataQuery = supabase
+    .from("research_runs")
+    .select(
+      "id, target_domain, result, duration_ms, completed_at, creator_session_id"
+    )
+    .in("status", ["done", "degraded"])
+    .not("result", "is", null)
+    .order("completed_at", { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  if (trimmed) {
+    // PostgREST `ilike` — case-insensitive substring on target_domain.
+    // company_name lives inside `result` JSONB; matching it would require
+    // a server-side filter expression we don't have a clean PostgREST
+    // form for, so we keep the search to target_domain for now.
+    const pattern = `%${trimmed.replace(/[%_]/g, (m) => `\\${m}`)}%`;
+    countQuery = countQuery.ilike("target_domain", pattern);
+    dataQuery = dataQuery.ilike("target_domain", pattern);
+  }
+
+  const [countRes, dataRes] = await Promise.all([countQuery, dataQuery]);
+
+  if (countRes.error) {
+    console.warn("[searchRuns] count query error:", countRes.error.message);
+  }
+  if (dataRes.error || !dataRes.data) {
+    if (dataRes.error) {
+      console.warn("[searchRuns] data query error:", dataRes.error.message);
+    }
+    return { runs: [], total: countRes.count ?? 0 };
+  }
+
+  const runs = dataRes.data.map((row): RecentRunRow => {
+    const result = row.result as
+      | {
+          recon?: { one_liner?: string };
+          people?: { decision_makers?: unknown[] };
+        }
+      | null;
+    return {
+      id: row.id as string,
+      target_domain: row.target_domain as string,
+      one_liner: result?.recon?.one_liner ?? "",
+      duration_ms: (row.duration_ms as number | null) ?? null,
+      decision_maker_count: result?.people?.decision_makers?.length ?? 0,
+      completed_at: row.completed_at as string,
+      creator_session_id: (row.creator_session_id as string | null) ?? null,
+    };
+  });
+
+  return {
+    runs,
+    total: countRes.count ?? runs.length,
+  };
+}
+
+/**
+ * Delete a run if and only if the supplied sessionId matches the row's
+ * creator_session_id. Returns one of three results so the caller can
+ * tell apart "not found", "not yours", and "deleted".
+ *
+ * Cascades: research_messages and research_embeddings are linked by
+ * `run_id` FKs; their ON DELETE behaviour is set in the initial
+ * migration so deleting the parent row clears them too.
+ */
+export type DeleteRunResult = "deleted" | "not_found" | "forbidden";
+
+export async function deleteRun(
+  runId: string,
+  sessionId: string
+): Promise<DeleteRunResult> {
+  const supabase = getSupabaseAdmin();
+
+  const { data, error: lookupError } = await supabase
+    .from("research_runs")
+    .select("id, creator_session_id")
+    .eq("id", runId)
+    .maybeSingle<{ id: string; creator_session_id: string | null }>();
+
+  if (lookupError) {
+    console.error("[deleteRun] lookup failed:", lookupError.message);
+    throw new Error(`Could not look up run: ${lookupError.message}`);
+  }
+  if (!data) return "not_found";
+  if (data.creator_session_id !== sessionId) return "forbidden";
+
+  const { error: deleteError } = await supabase
+    .from("research_runs")
+    .delete()
+    .eq("id", runId);
+
+  if (deleteError) {
+    console.error("[deleteRun] delete failed:", deleteError.message);
+    throw new Error(`Could not delete run: ${deleteError.message}`);
+  }
+  return "deleted";
 }
 
 /** Move a pending row into running status when the orchestrator starts work. */

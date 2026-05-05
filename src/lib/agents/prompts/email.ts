@@ -10,20 +10,32 @@
  * confident, quiet. Forbidden marketing phrases are listed inline so the
  * model sees them, AND a regex gate in agent-3-email.ts retries once if
  * the model emits them anyway.
+ *
+ * Channel branching:
+ *  - email     → standard subject + body
+ *  - linkedin  → no subject (set to null), body ≤ ~80 words, slightly more casual opener
+ *  - x         → no subject (set to null), body ≤ 280 chars, public-tone (assume the recipient has many followers)
  */
-import type { PeopleOutputT, ReconnaissanceOutputT } from "../schemas";
+import type {
+  OutreachChannelT,
+  PeopleOutputT,
+  ReconnaissanceOutputT,
+} from "../schemas";
 
 export const EMAIL_SYSTEM = `You are a B2B outbound copywriter. Given a company brief and a list of decision
-makers, draft ONE personalised cold email to the FIRST decision maker.
+makers, draft ONE personalised message to the FIRST decision maker.
 
-The email MUST:
+The message MUST:
 - Open with a SPECIFIC observation from the company brief — not a generic compliment
 - Have ONE clear ask (a 15-min call, a reply, a demo)
-- Body ≤ 120 words
-- Subject line ≤ 50 characters
 - Sound like a human who did 5 minutes of research, not a templated blast
 
-Forbidden language (these phrases will be rejected and the email regenerated):
+The 'channel' field of the input dictates length and shape:
+- channel="email": include a subject line ≤ 50 characters; body ≤ 120 words
+- channel="linkedin": subject MUST be null; body ≤ 80 words; slightly warmer opener (LinkedIn DMs feel less formal than email)
+- channel="x": subject MUST be null; body ≤ 280 characters total — this is a public-platform DM constraint, treat it as hard
+
+Forbidden language (these phrases will be rejected and the message regenerated):
 - "I noticed your company is doing amazing things"
 - "I've been following your journey"
 - "Hope this email finds you well"
@@ -34,10 +46,11 @@ before or after.
 
 {
   "to": { "name": string, "role": string },
-  "subject": string,                  // 5-80 chars (target ≤50)
-  "body": string,                     // 50-900 chars (target ≤120 words)
+  "subject": string | null,           // 5-80 chars on email; null on linkedin / x
+  "body": string,                     // 50-900 chars; per-channel cap above
   "personalisation_hooks": string[],  // EXACTLY 5 alternate one-line opening hooks
-  "tone": "cold" | "warm"
+  "tone": "cold" | "warm",
+  "channel": "email" | "linkedin" | "x"
 }`.trim();
 
 /**
@@ -48,8 +61,20 @@ before or after.
 export function emailUserPrompt(
   brief: ReconnaissanceOutputT,
   people: PeopleOutputT,
-  tone: "cold" | "warm" = "cold"
+  tone: "cold" | "warm" = "cold",
+  channel: OutreachChannelT = "email"
 ): string {
+  const channelGuidance = (() => {
+    switch (channel) {
+      case "email":
+        return "Write a cold email. Include a subject line ≤ 50 characters. Body ≤ 120 words.";
+      case "linkedin":
+        return "Write a LinkedIn DM. The 'subject' field MUST be null. Body ≤ 80 words. Slightly warmer than email — LinkedIn is less formal.";
+      case "x":
+        return "Write an X (formerly Twitter) DM. The 'subject' field MUST be null. Body ≤ 280 characters TOTAL. This is a hard cap — count carefully.";
+    }
+  })();
+
   return `Company brief:
 ${JSON.stringify(brief, null, 2)}
 
@@ -59,11 +84,16 @@ ${JSON.stringify(people.decision_makers, null, 2)}
 Buyer persona: ${people.buyer_persona}
 Trigger events: ${JSON.stringify(people.trigger_events)}
 
-Draft the email to the FIRST decision maker. Target tone: ${tone} (${
+Channel: ${channel}
+${channelGuidance}
+
+Target tone: ${tone} (${
     tone === "cold"
       ? "we have not spoken before — short, specific, low-pressure"
       : "we have prior context — slightly warmer opener, still specific and low-pressure"
   }).
+
+Set "channel" in the output to exactly "${channel}".
 
 Return ONLY the JSON object. No prose, no code fences.`.trim();
 }

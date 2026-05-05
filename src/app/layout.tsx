@@ -3,6 +3,7 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { ThemeProvider } from "@/components/theme-provider";
 import { SiteFooter } from "@/components/site-footer";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
@@ -77,9 +78,21 @@ export default function RootLayout({
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"
-          enableSystem={false}
+          enableSystem
           disableTransitionOnChange
         >
+          {/*
+            Fixed top-right theme toggle. z-50 keeps it above page
+            content and InteractiveBackground (z-0). ThemeToggle uses
+            useSyncExternalStore to render an identically-sized
+            placeholder during SSR + first client paint, then swaps to
+            the live radiogroup once mounted — that's how it dodges the
+            hydration mismatch next-themes would otherwise cause (the
+            cookie-driven theme isn't readable in RSC).
+          */}
+          <div className="fixed right-4 top-4 z-50 sm:right-6 sm:top-6">
+            <ThemeToggle />
+          </div>
           {children}
           <SiteFooter />
           <Toaster richColors closeButton position="bottom-right" />
