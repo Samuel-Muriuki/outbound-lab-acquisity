@@ -25,6 +25,13 @@ export interface ChatMessage {
   tool_calls?: ChatToolCall[];
   /** Present on tool messages — the id of the tool call this is the result of. */
   tool_call_id?: string;
+  /**
+   * Present on tool messages — the name of the tool that produced this
+   * result. Required by the Vercel AI SDK's ToolResultPart format
+   * (which keys results by name, not just id). The OpenAI-compatible
+   * providers (Groq, OpenRouter) ignore it.
+   */
+  tool_name?: string;
 }
 
 export interface ToolDefinition<

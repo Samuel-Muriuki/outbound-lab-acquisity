@@ -1,13 +1,13 @@
 import "server-only";
-import OpenAI from "openai";
+import { generateText, tool } from "ai";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type {
   ChatOptions,
   ChatResult,
   ChatToolCall,
   LLMProvider,
 } from "../types";
-import { zodToOpenAISchema } from "../utils/zod-schema";
-import { toOpenAIMessage, mapOpenAIFinishReason } from "../utils/messages";
+import { toAISDKMessages, mapAISDKFinishReason } from "../utils/messages";
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 const OPENROUTER_MODEL = "meta-llama/llama-3.3-70b-instruct:free";
@@ -16,24 +16,26 @@ const OPENROUTER_MODEL = "meta-llama/llama-3.3-70b-instruct:free";
  * OpenRouter provider — last-resort fallback when Groq + Gemini are
  * both degraded.
  *
- * Routes to whichever free Llama 3.3 70B host is currently up (varies
- * — backed by community-hosted free inference endpoints). Free tier
- * is generous-but-variable, typically ~50 req/day.
+ * Migrated to the Vercel AI SDK via `@ai-sdk/openai-compatible` —
+ * OpenRouter speaks the OpenAI Chat Completions schema, so the
+ * compatible adapter handles message + tool conversion for us. The
+ * HTTP-Referer + X-Title headers OpenRouter uses for attribution are
+ * forwarded via the `headers` option.
  *
- * Same OpenAI-compatible API shape as Groq, so the implementation is
- * almost identical — different baseURL, different model id, plus the
- * HTTP-Referer + X-Title headers OpenRouter uses to attribute traffic
- * (visible to OpenRouter but not the upstream model host).
+ * Free tier is generous-but-variable, typically ~50 req/day; routes to
+ * whichever community-hosted Llama 3.3 70B host is currently up.
  */
 export function createOpenRouterProvider(): LLMProvider {
   const apiKey = process.env.OPENROUTER_API_KEY;
-  const client = apiKey
-    ? new OpenAI({
+  const provider = apiKey
+    ? createOpenAICompatible({
+        name: "openrouter",
         apiKey,
         baseURL: OPENROUTER_BASE_URL,
-        defaultHeaders: {
+        headers: {
           "HTTP-Referer":
-            process.env.NEXT_PUBLIC_APP_URL ?? "https://outbound-lab-acquisity.vercel.app",
+            process.env.NEXT_PUBLIC_APP_URL ??
+            "https://outbound-lab-acquisity.vercel.app",
           "X-Title": "OutboundLab",
         },
       })
@@ -43,66 +45,50 @@ export function createOpenRouterProvider(): LLMProvider {
     name: "openrouter",
     isAvailable: () => Boolean(apiKey),
     async chat(opts: ChatOptions): Promise<ChatResult> {
-      if (!client)
+      if (!provider) {
         throw new Error(
           "OpenRouter provider not configured (missing OPENROUTER_API_KEY)"
         );
+      }
 
-      const tools = opts.tools?.map((t) => ({
-        type: "function" as const,
-        function: {
-          name: t.name,
-          description: t.description,
-          parameters: zodToOpenAISchema(t.parameters),
-        },
-      }));
+      const tools = opts.tools
+        ? Object.fromEntries(
+            opts.tools.map((t) => [
+              t.name,
+              tool({
+                description: t.description,
+                inputSchema: t.parameters,
+              }),
+            ])
+          )
+        : undefined;
 
-      const response = await client.chat.completions.create(
-        {
-          model: OPENROUTER_MODEL,
-          messages: [
-            { role: "system", content: opts.system },
-            ...opts.messages.map(toOpenAIMessage),
-          ],
-          tools,
-          temperature: opts.temperature ?? 0.2,
-          max_tokens: opts.maxTokens ?? 2048,
-          response_format:
-            opts.responseFormat === "json"
-              ? { type: "json_object" }
-              : undefined,
-        },
-        { signal: opts.abortSignal }
-      );
-
-      const choice = response.choices[0];
-      const rawToolCalls = choice?.message?.tool_calls ?? [];
-      const toolCalls: ChatToolCall[] = rawToolCalls.map((tc) => {
-        if (tc.type !== "function") {
-          throw new Error(
-            `OpenRouter returned a non-function tool call (${tc.type}); none of our tools register as anything else.`
-          );
-        }
-        let parsed: Record<string, unknown> = {};
-        try {
-          parsed = JSON.parse(tc.function.arguments) as Record<string, unknown>;
-        } catch {
-          // Same as Groq — defensive against malformed model output.
-        }
-        return {
-          id: tc.id,
-          name: tc.function.name,
-          arguments: parsed,
-        };
+      const result = await generateText({
+        model: provider(OPENROUTER_MODEL),
+        system: opts.system,
+        messages: toAISDKMessages(opts.messages),
+        tools,
+        temperature: opts.temperature ?? 0.2,
+        maxOutputTokens: opts.maxTokens ?? 2048,
+        abortSignal: opts.abortSignal,
+        providerOptions: opts.responseFormat === "json"
+          ? { openrouter: { responseFormat: { type: "json_object" } } }
+          : undefined,
       });
 
+      const toolCalls: ChatToolCall[] = result.toolCalls.map((tc) => ({
+        id: tc.toolCallId,
+        name: tc.toolName,
+        arguments: (tc.input ?? {}) as Record<string, unknown>,
+      }));
+
       return {
-        text: choice?.message?.content ?? "",
+        text: result.text,
         toolCalls,
-        finishReason: mapOpenAIFinishReason(choice?.finish_reason),
+        finishReason: mapAISDKFinishReason(result.finishReason),
         provider: "openrouter",
-        tokensIn: response.usage?.prompt_tokens ?? 0,
-        tokensOut: response.usage?.completion_tokens ?? 0,
+        tokensIn: result.usage?.inputTokens ?? 0,
+        tokensOut: result.usage?.outputTokens ?? 0,
       };
     },
   };

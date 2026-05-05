@@ -5,7 +5,7 @@
 **Status:** Phase 1 live in production (2026-05-05)
 **Target:** Acquisity application (Sr Full-Stack Engineer — Next.js / AI)
 **Live URL:** `outbound-lab-acquisity.vercel.app`
-**Repo:** `github.com/Samuel-Muriuki/outbound-lab-acquisity` (public)
+**Repo:** `github.com/Samuel-Muriuki/OutBound-Lab-Acquisity` (public)
 
 ---
 

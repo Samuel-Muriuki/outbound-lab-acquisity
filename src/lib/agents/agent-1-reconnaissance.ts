@@ -143,6 +143,7 @@ async function runOnce(
           role: "tool",
           content: toolResult.slice(0, MODEL_TOOL_RESULT_CHARS),
           tool_call_id: tc.id,
+          tool_name: tc.name,
         });
       }
 
