@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import type { ResearchStreamState } from "@/hooks/use-research-stream";
 import type { AgentIndex } from "@/lib/agents/stream-events";
+import { TiltedWrapper } from "@/components/tilted-wrapper";
 import { AgentCard } from "./agent-card";
 
 interface AgentTimelineProps {
@@ -58,13 +59,19 @@ export function AgentTimeline({ state }: AgentTimelineProps) {
       className="flex flex-col gap-3 list-none p-0"
     >
       <li ref={agent1Ref}>
-        <AgentCard index={1} state={state.agents[1]} />
+        <TiltedWrapper rotateAmplitude={4} scaleOnHover={1.01}>
+          <AgentCard index={1} state={state.agents[1]} />
+        </TiltedWrapper>
       </li>
       <li ref={agent2Ref}>
-        <AgentCard index={2} state={state.agents[2]} />
+        <TiltedWrapper rotateAmplitude={4} scaleOnHover={1.01}>
+          <AgentCard index={2} state={state.agents[2]} />
+        </TiltedWrapper>
       </li>
       <li ref={agent3Ref}>
-        <AgentCard index={3} state={state.agents[3]} />
+        <TiltedWrapper rotateAmplitude={4} scaleOnHover={1.01}>
+          <AgentCard index={3} state={state.agents[3]} />
+        </TiltedWrapper>
       </li>
     </ol>
   );

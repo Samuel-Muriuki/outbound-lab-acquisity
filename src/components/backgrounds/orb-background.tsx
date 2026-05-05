@@ -285,6 +285,11 @@ export function OrbBackground({
     let currentRot = 0;
     const rotationSpeed = 0.3;
 
+    // Window-level listener: the container has `pointer-events-none`
+    // (it sits behind page content), so mousemove never fires on it.
+    // Listening on window and computing coordinates relative to the
+    // container's bounding rect gives the orb its hover response back
+    // without the canvas stealing clicks from the URL input / buttons.
     const handleMouseMove = (e: MouseEvent) => {
       const rect = container.getBoundingClientRect();
       const x = e.clientX - rect.left;
@@ -302,8 +307,8 @@ export function OrbBackground({
       targetHover = 0;
     };
 
-    container.addEventListener("mousemove", handleMouseMove);
-    container.addEventListener("mouseleave", handleMouseLeave);
+    window.addEventListener("mousemove", handleMouseMove, { passive: true });
+    document.addEventListener("mouseleave", handleMouseLeave);
 
     let rafId = 0;
     const update = (t: number) => {
@@ -335,8 +340,8 @@ export function OrbBackground({
     return () => {
       cancelAnimationFrame(rafId);
       window.removeEventListener("resize", resize);
-      container.removeEventListener("mousemove", handleMouseMove);
-      container.removeEventListener("mouseleave", handleMouseLeave);
+      window.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseleave", handleMouseLeave);
       if (gl.canvas.parentNode === container) {
         container.removeChild(gl.canvas);
       }
