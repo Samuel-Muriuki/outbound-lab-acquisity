@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { HeroInput } from "@/components/hero-input";
-import { InteractiveBackground } from "@/components/interactive-background";
+import { OrbBackground } from "@/components/backgrounds/orb-background";
 import { RecentRunsPreview } from "@/components/landing/recent-runs-preview";
 
 export const dynamic = "force-dynamic";
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export default function HomePage() {
   return (
     <>
-      <InteractiveBackground variant="spotlight" />
+      <OrbBackground />
       <main
         id="main"
         tabIndex={-1}
