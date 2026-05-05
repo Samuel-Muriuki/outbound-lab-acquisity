@@ -1,5 +1,3 @@
-import { ThemeToggle } from "@/components/theme-toggle";
-
 const PORTFOLIO_URL = "https://samuel-muriuki.vercel.app/";
 const GITHUB_URL = "https://github.com/Samuel-Muriuki/outbound-lab-acquisity";
 
@@ -26,7 +24,8 @@ function GithubMark({ className }: { className?: string }) {
  * `mt-auto` class combined with the layout's `min-h-full flex flex-col`.
  *
  * Voice per `.ai/design/brand-decision-2026-05.md`: precise, confident,
- * quiet. Two links + a copyright + a quiet theme toggle.
+ * quiet. Two links + a copyright. Theme toggle lives in the layout's
+ * fixed top-right slot.
  */
 export function SiteFooter() {
   return (
@@ -43,19 +42,16 @@ export function SiteFooter() {
             Samuel Muriuki
           </a>
         </p>
-        <div className="flex items-center gap-4">
-          <ThemeToggle />
-          <a
-            href={GITHUB_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="OutboundLab source on GitHub (opens in a new tab)"
-            title="OutboundLab on GitHub"
-            className="grid size-8 place-items-center rounded-full transition-colors duration-200 [transition-timing-function:var(--ease-out)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
-          >
-            <GithubMark className="size-4" />
-          </a>
-        </div>
+        <a
+          href={GITHUB_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="OutboundLab source on GitHub (opens in a new tab)"
+          title="OutboundLab on GitHub"
+          className="grid size-8 place-items-center rounded-full transition-colors duration-200 [transition-timing-function:var(--ease-out)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+        >
+          <GithubMark className="size-4" />
+        </a>
       </div>
     </footer>
   );
