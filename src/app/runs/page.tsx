@@ -7,6 +7,10 @@ import { DotFieldBackground } from "@/components/backgrounds/dot-field-backgroun
 import { RunsSearch } from "@/components/runs/runs-search";
 import { TiltedWrapper } from "@/components/tilted-wrapper";
 import { HoverElectricBorder } from "@/components/hover-electric-border";
+import {
+  formatAbsoluteDateTime,
+  formatRunDateTime,
+} from "@/lib/utils/format-date";
 
 export const dynamic = "force-dynamic";
 
@@ -92,18 +96,27 @@ export default async function RunsPage({ searchParams }: RunsPageProps) {
                         </p>
                       )}
                       <hr className="my-3 border-border/60" />
-                      <p className="mt-auto font-mono text-xs tabular-nums text-subtle-foreground">
-                        {run.decision_maker_count > 0 && (
-                          <>
-                            {run.decision_maker_count}{" "}
-                            {run.decision_maker_count === 1 ? "maker" : "makers"}
-                          </>
-                        )}
-                        {run.decision_maker_count > 0 && run.duration_ms !== null && " · "}
-                        {run.duration_ms !== null && (
-                          <>{(run.duration_ms / 1000).toFixed(1)}s</>
-                        )}
-                      </p>
+                      <div className="mt-auto flex items-baseline justify-between gap-2 font-mono text-xs tabular-nums text-subtle-foreground">
+                        <span>
+                          {run.decision_maker_count > 0 && (
+                            <>
+                              {run.decision_maker_count}{" "}
+                              {run.decision_maker_count === 1 ? "maker" : "makers"}
+                            </>
+                          )}
+                          {run.decision_maker_count > 0 && run.duration_ms !== null && " · "}
+                          {run.duration_ms !== null && (
+                            <>{(run.duration_ms / 1000).toFixed(1)}s</>
+                          )}
+                        </span>
+                        <time
+                          dateTime={run.completed_at}
+                          title={formatAbsoluteDateTime(run.completed_at)}
+                          className="truncate"
+                        >
+                          {formatRunDateTime(run.completed_at)}
+                        </time>
+                      </div>
                     </Link>
                   </TiltedWrapper>
                   {/* DeleteRunButton inside HoverElectricBorder so the

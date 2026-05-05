@@ -110,6 +110,8 @@ export default async function ResearchPage({
       }
       isOwner={isOwner}
       similarRuns={similarRuns}
+      runStartedAt={data.started_at}
+      runCompletedAt={data.completed_at}
     />
   );
 }
