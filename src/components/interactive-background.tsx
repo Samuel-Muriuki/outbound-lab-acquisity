@@ -6,13 +6,20 @@ export interface InteractiveBackgroundProps {
   /**
    * Visual variant.
    *  - 'spotlight' (default) — soft radial brand-tinted gradient that
-   *    follows the cursor with a click ripple.
+   *    follows the cursor with a click ripple. Intensity (--mv, 0-1)
+   *    scales with cursor velocity and decays toward 0 when idle.
    *  - 'aurora' — slow drifting blobs (no cursor follow). Used on
    *    surfaces where a follower would compete with the foreground
    *    (e.g. the streaming view's tool-call timeline).
    */
   variant?: "spotlight" | "aurora";
 }
+
+/** Pixels-per-millisecond mapped to --mv = 1. Above this caps. */
+const MAX_VELOCITY_PPM = 3;
+
+/** Multiplier applied per-frame when no mousemove arrives. ~120ms half-life. */
+const VELOCITY_DECAY = 0.94;
 
 /**
  * Decorative full-bleed background that responds to the visitor's
@@ -21,12 +28,15 @@ export interface InteractiveBackgroundProps {
  * `prefers-reduced-motion` by short-circuiting all listeners.
  *
  * Implementation notes:
- *  - Mouse position writes to CSS custom properties via `style.setProperty`
- *    rather than React state. Avoids a render-per-mousemove and lets the
- *    GPU compose the gradient directly.
- *  - Click ripples are a small DOM pool: we keep up to 4 ripple divs and
- *    reset their `key`-equivalent (animation-name) by toggling a class
- *    on each click. Pure CSS animation handles the rest.
+ *  - Mouse position + velocity write to CSS custom properties via
+ *    `style.setProperty` rather than React state. Avoids a
+ *    render-per-mousemove and lets the GPU compose the gradient
+ *    directly.
+ *  - Velocity is computed from successive mousemove deltas, clamped to
+ *    [0, 1] against MAX_VELOCITY_PPM, and decays via rAF when the
+ *    cursor is idle so the gradient breathes back to baseline.
+ *  - Click ripples are a small DOM pool: 4 ripple divs reused round-robin,
+ *    reset by toggling `data-state` to retrigger the keyframes.
  */
 export function InteractiveBackground({
   variant = "spotlight",
@@ -43,9 +53,56 @@ export function InteractiveBackground({
     const root = rootRef.current;
     if (!root) return;
 
+    let lastX: number | null = null;
+    let lastY: number | null = null;
+    let lastMoveAt = performance.now();
+    let velocity = 0;
+    let rafId = 0;
+
+    function setMv(value: number) {
+      const clamped = value < 0 ? 0 : value > 1 ? 1 : value;
+      root!.style.setProperty("--mv", clamped.toFixed(3));
+    }
+
+    function tick() {
+      // Decay velocity toward 0 each frame. Stop the rAF loop once it's
+      // close enough to zero so we're not running 60Hz forever.
+      velocity *= VELOCITY_DECAY;
+      setMv(velocity);
+      if (velocity > 0.005) {
+        rafId = requestAnimationFrame(tick);
+      } else {
+        velocity = 0;
+        setMv(0);
+        rafId = 0;
+      }
+    }
+
     function handleMove(event: MouseEvent) {
       root!.style.setProperty("--mx", `${event.clientX}px`);
       root!.style.setProperty("--my", `${event.clientY}px`);
+
+      const now = performance.now();
+      if (lastX !== null && lastY !== null) {
+        const dx = event.clientX - lastX;
+        const dy = event.clientY - lastY;
+        const distance = Math.hypot(dx, dy);
+        const dt = Math.max(1, now - lastMoveAt);
+        const ppm = distance / dt;
+        const sample = Math.min(1, ppm / MAX_VELOCITY_PPM);
+        // Take the max of the new sample and the decaying value so a
+        // burst snaps the brightness up immediately, while idle frames
+        // continue the smooth decay.
+        velocity = Math.max(velocity, sample);
+        setMv(velocity);
+      }
+      lastX = event.clientX;
+      lastY = event.clientY;
+      lastMoveAt = now;
+
+      if (rafId === 0) {
+        rafId = requestAnimationFrame(tick);
+      }
     }
 
     function handleClick(event: MouseEvent) {
@@ -69,6 +126,7 @@ export function InteractiveBackground({
       return () => {
         window.removeEventListener("mousemove", handleMove);
         window.removeEventListener("click", handleClick);
+        if (rafId !== 0) cancelAnimationFrame(rafId);
       };
     }
     // 'aurora' variant has no listeners — pure CSS animation.

@@ -331,16 +331,20 @@
  * Interactive background — spotlight variant
  * ============================================
  * Cursor-following radial gradient + click ripples. Driven by
- * --mx / --my / --rx / --ry CSS custom properties set from JS by
+ * --mx / --my / --rx / --ry / --mv CSS custom properties set from JS by
  * <InteractiveBackground variant="spotlight"> in
  * src/components/interactive-background.tsx.
+ *
+ * --mv (motion velocity) is 0-1; multiplies the inner alpha and the
+ * radius so a fast cursor blooms brighter and wider, while an idle
+ * cursor decays to a faint baseline glow.
  */
 .spotlight-bg {
   background:
     radial-gradient(
-      640px circle at var(--mx, 50vw) var(--my, 50vh),
-      hsl(217 91% 60% / 0.08),
-      hsl(199 89% 60% / 0.04) 30%,
+      calc(560px + 220px * var(--mv, 0)) circle at var(--mx, 50vw) var(--my, 50vh),
+      hsl(217 91% 60% / calc(0.05 + 0.18 * var(--mv, 0))),
+      hsl(199 89% 60% / calc(0.03 + 0.08 * var(--mv, 0))) 30%,
       transparent 70%
     );
   transition: background 80ms linear;
