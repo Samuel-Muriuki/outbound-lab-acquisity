@@ -1,5 +1,5 @@
 const PORTFOLIO_URL = "https://samuel-muriuki.vercel.app/";
-const GITHUB_URL = "https://github.com/Samuel-Muriuki";
+const GITHUB_URL = "https://github.com/Samuel-Muriuki/outbound-lab-acquisity";
 
 /**
  * Site-wide footer — sits at the bottom of every page via the
@@ -27,7 +27,7 @@ export function SiteFooter() {
           href={GITHUB_URL}
           target="_blank"
           rel="noopener noreferrer"
-          aria-label="GitHub profile (opens in a new tab)"
+          aria-label="OutboundLab source on GitHub (opens in a new tab)"
           className="transition-colors duration-200 [transition-timing-function:var(--ease-out)] hover:text-foreground"
         >
           GitHub →
