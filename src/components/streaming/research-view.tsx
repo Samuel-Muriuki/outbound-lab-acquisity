@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { ArrowLeft, AlertCircle, Zap } from "lucide-react";
+import { ArrowLeft, AlertCircle, X, Zap } from "lucide-react";
 import {
   useResearchStream,
   type UseResearchStreamArgs,
@@ -60,6 +60,15 @@ export function ResearchView({
   const isCacheHit =
     cacheSourceCompletedAt !== null || stream.cacheSourceRunId !== null;
 
+  // While the EventSource is open the user might want to abort. Navigating
+  // home unmounts this view, which triggers the hook's cleanup and closes
+  // the stream client-side. (The orchestrator on the server keeps churning
+  // until the run completes — full server-side cancellation needs a
+  // `cancelled` status enum + abort signal plumbing through the agents
+  // and is left for a follow-up PR.)
+  const isInFlight =
+    stream.status === "connecting" || stream.status === "streaming";
+
   const provider = stream.agents[1].provider ?? stream.agents[2].provider ?? stream.agents[3].provider;
   const totalDuration =
     (stream.agents[1].durationMs ?? 0) +
@@ -74,10 +83,23 @@ export function ResearchView({
       <header className="flex items-center justify-between gap-4">
         <Link
           href="/"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          className={
+            isInFlight
+              ? "inline-flex items-center gap-1.5 text-sm font-medium text-error transition-colors hover:text-error/80"
+              : "inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          }
         >
-          <ArrowLeft className="size-4" aria-hidden />
-          Back
+          {isInFlight ? (
+            <>
+              <X className="size-4" aria-hidden />
+              Cancel
+            </>
+          ) : (
+            <>
+              <ArrowLeft className="size-4" aria-hidden />
+              Back
+            </>
+          )}
         </Link>
         <span className="flex items-center gap-2 text-sm">
           <span className="size-2 rounded-full gradient-bg" aria-hidden />
