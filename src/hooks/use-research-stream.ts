@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { TRPCClientError } from "@trpc/client";
+import { trpc } from "@/lib/trpc/client";
 import type { ResearchResult } from "@/lib/agents/orchestrator";
 import type { ProviderName } from "@/lib/agents/llm/types";
 import type {
@@ -40,7 +42,7 @@ export interface ToolCallEntry {
  * events flow in.
  */
 export interface ResearchStreamState {
-  /** 'idle' = no EventSource yet (e.g. status=done, no streaming needed). */
+  /** 'idle' = no subscription yet (e.g. status=done, no streaming needed). */
   status: "idle" | "connecting" | "streaming" | "done" | "error";
   /** Per-agent timeline rows. */
   agents: Record<AgentIndex, AgentState>;
@@ -57,8 +59,8 @@ export interface UseResearchStreamArgs {
   runId: string;
   /**
    * Initial run status from the server-rendered shell. If 'done' or
-   * 'degraded' or 'error', the hook seeds state and never opens an
-   * EventSource. If 'pending' or 'running', the hook subscribes.
+   * 'degraded' or 'error', the hook seeds state and never opens a
+   * subscription. If 'pending' or 'running', the hook subscribes.
    */
   initialStatus: "pending" | "running" | "done" | "error" | "degraded";
   /** When initialStatus is 'done' / 'degraded' the cached payload from research_runs.result. */
@@ -85,15 +87,18 @@ function makeInitialAgents(): Record<AgentIndex, AgentState> {
 }
 
 /**
- * Subscribes to `GET /api/research/[id]/stream` and accumulates events
- * into typed React state.
+ * Subscribes to `trpc.research.stream` and accumulates events into
+ * typed React state.
  *
- * - Skips the EventSource entirely when initialStatus is already
+ * - Skips the subscription entirely when initialStatus is already
  *   resolved ('done' / 'degraded' / 'error') and seeds state from the
  *   provided initialResult / initialError instead. The streaming page
  *   server-component does this hand-off so cache hits and past runs
- *   never trigger a redundant SSE connection.
- * - Closes the EventSource on `final_result` or `error`, or on unmount.
+ *   never trigger a redundant connection.
+ * - Cancels the subscription on `final_result` or `error`, or on
+ *   unmount. tRPC's httpSubscriptionLink is SSE under the hood and
+ *   auto-reconnects on transient drops; the server-side re-attach
+ *   path picks up where the messages log left off.
  *
  * Source of truth: `.ai/docs/06-agent-system-design.md` §4 + `.ai/docs/12-ux-flows.md` §2.5.
  */
@@ -116,61 +121,55 @@ export function useResearchStream({
     error: initialError,
   }));
 
-  // Stable ref to mark whether the EventSource is already open — guards
-  // against StrictMode double-effect in dev.
-  const eventSourceRef = useRef<EventSource | null>(null);
+  // Tracks whether the subscription has been opened — guards against
+  // StrictMode double-effect in dev.
+  const subscribedRef = useRef(false);
 
   useEffect(() => {
     if (isResolved) return;
-    if (eventSourceRef.current) return;
+    if (subscribedRef.current) return;
+    subscribedRef.current = true;
 
     setState((prev) => ({ ...prev, status: "connecting" }));
 
-    const url = `/api/research/${runId}/stream`;
-    const es = new EventSource(url);
-    eventSourceRef.current = es;
-
-    es.onopen = () => {
-      setState((prev) => ({ ...prev, status: "streaming" }));
-    };
-
-    es.onmessage = (msg) => {
-      let event: StreamEvent;
-      try {
-        event = JSON.parse(msg.data) as StreamEvent;
-      } catch (err) {
-        console.warn("[useResearchStream] Failed to parse SSE frame:", err);
-        return;
+    let unsubscribed = false;
+    const sub = trpc.research.stream.subscribe(
+      { id: runId },
+      {
+        onStarted() {
+          setState((prev) => ({ ...prev, status: "streaming" }));
+        },
+        onData(event: StreamEvent) {
+          setState((prev) => applyEvent(prev, event));
+          if (event.type === "final_result" || event.type === "error") {
+            sub.unsubscribe();
+            unsubscribed = true;
+          }
+        },
+        onError(err) {
+          if (unsubscribed) return;
+          console.warn("[useResearchStream] subscription error", err);
+          const message =
+            err instanceof TRPCClientError && err.message
+              ? err.message
+              : "Connection lost. Refresh to try again.";
+          setState((prev) =>
+            prev.status === "done" || prev.status === "error"
+              ? prev
+              : {
+                  ...prev,
+                  status: "error",
+                  error: prev.error ?? message,
+                }
+          );
+        },
       }
-      setState((prev) => applyEvent(prev, event));
-
-      if (event.type === "final_result" || event.type === "error") {
-        es.close();
-        eventSourceRef.current = null;
-      }
-    };
-
-    es.onerror = (event) => {
-      console.warn("[useResearchStream] EventSource error", event);
-      setState((prev) =>
-        prev.status === "done" || prev.status === "error"
-          ? prev
-          : {
-              ...prev,
-              status: "error",
-              error:
-                prev.error ?? "Connection lost. Refresh to try again.",
-            }
-      );
-      es.close();
-      eventSourceRef.current = null;
-    };
+    );
 
     return () => {
-      if (eventSourceRef.current === es) {
-        es.close();
-        eventSourceRef.current = null;
-      }
+      unsubscribed = true;
+      sub.unsubscribe();
+      subscribedRef.current = false;
     };
   }, [runId, isResolved]);
 
