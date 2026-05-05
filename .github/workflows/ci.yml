@@ -1,0 +1,61 @@
+name: CI
+
+# Runs on every push to develop / main and on every PR opened against
+# either branch. Free GitHub Actions minutes are unlimited on public
+# repos so cost is not a concern.
+#
+# CD is handled by Vercel — `main` auto-deploys to production. Preview
+# deploys are disabled at the Vercel project level to control free-tier
+# build minutes; this CI workflow is therefore the only feedback for
+# in-flight branches and PRs.
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+
+# Cancel any in-flight CI run for the same ref when a new commit lands —
+# saves runner minutes when force-pushing or rapid-iterating.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: lint + typecheck + test + build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Build
+        # Supabase / LLM env vars are validated lazily at request time,
+        # not at build time — production env is set in the Vercel project
+        # so we don't need to mirror them here.
+        run: pnpm build
