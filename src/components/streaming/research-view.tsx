@@ -114,15 +114,9 @@ export function ResearchView({
             </>
           )}
         </Link>
-        <div className="flex items-center gap-4">
-          {canDelete && (
-            <DeleteRunButton runId={runId} onDeleted="home" variant="with-label" />
-          )}
-          <span className="flex items-center gap-2 text-sm">
-            <span className="size-2 rounded-full gradient-bg" aria-hidden />
-            <span className="font-medium tracking-tight">OutboundLab</span>
-          </span>
-        </div>
+        {canDelete && (
+          <DeleteRunButton runId={runId} onDeleted="home" variant="with-label" />
+        )}
       </header>
 
       <section className="mt-12">

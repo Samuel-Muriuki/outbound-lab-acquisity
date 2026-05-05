@@ -1,5 +1,6 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
 import { Monitor, Moon, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -12,17 +13,33 @@ const OPTIONS: ReadonlyArray<{ value: ThemeChoice; Icon: typeof Sun; label: stri
   { value: "system", Icon: Monitor, label: "System" },
 ];
 
+/** Returns false during SSR and the very first client render, true thereafter. */
+function useMounted(): boolean {
+  return useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+}
+
 /**
  * Three-state theme toggle (Light / Dark / System).
  *
- * `useTheme().theme` is `undefined` until next-themes hydrates on the
- * client — render an identically-sized placeholder during that window
- * so the footer layout doesn't shift when the toggle resolves.
+ * Renders an identically-sized placeholder during SSR + first client
+ * paint, then swaps to the live radiogroup once mounted. This avoids
+ * the next-themes hydration mismatch (the cookie-driven theme isn't
+ * readable in RSC, so the server-rendered toggle would always disagree
+ * with the client's resolved theme).
+ *
+ * `useSyncExternalStore` is the lint-clean way to derive a mounted
+ * flag — no `useEffect(() => setState(true), [])` which trips
+ * `react-hooks/set-state-in-effect`.
  */
 export function ThemeToggle() {
+  const mounted = useMounted();
   const { theme, setTheme } = useTheme();
 
-  if (theme === undefined) {
+  if (!mounted) {
     return (
       <div
         className="inline-flex h-8 items-center gap-1 rounded-full border border-border/60 bg-surface-1/40 p-0.5"
@@ -35,7 +52,7 @@ export function ThemeToggle() {
     );
   }
 
-  const active: ThemeChoice = (theme as ThemeChoice) ?? "system";
+  const active: ThemeChoice = (theme as ThemeChoice | undefined) ?? "system";
 
   return (
     <div
