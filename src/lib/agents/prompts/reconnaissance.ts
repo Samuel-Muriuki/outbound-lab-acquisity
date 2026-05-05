@@ -30,11 +30,16 @@ code fences. Do NOT add prose before or after the JSON. Just the JSON object.
   "company_name": string,           // their official name (1-120 chars)
   "one_liner": string,              // 10-140 chars, what they do
   "what_they_sell": string,         // 20-400 chars, the product
-  "target_market": string,          // 20-400 chars, ICP. Be specific about who buys —
-                                    // include industry / company-size / role.
+  "target_market": string,          // STRICT 20-400 chars (validator rejects under 20).
+                                    // Name BOTH the buyer industry/size AND the role/title
+                                    // who decides. A two-clause sentence is the floor.
                                     // GOOD: "B2B SaaS startups under 200 employees,
-                                    // specifically heads of growth and revenue ops"
-                                    // BAD:  "B2B sales teams" (too short, too vague)
+                                    //        specifically heads of growth and revenue ops"
+                                    // GOOD: "Series A-C fintech companies, targeting CTOs
+                                    //        and VPs of engineering"
+                                    // BAD:  "B2B sales teams"        ← 15 chars, rejected
+                                    // BAD:  "Enterprise companies"   ← 20 chars but no role
+                                    // BAD:  "Marketers"              ← 9 chars, rejected
   "company_size_estimate": string,  // see size rules below
                                     //  - exact range if found (e.g. "20-50 employees", "100-200 employees")
                                     //  - else bucket: "Small (<50 employees)", "Medium (50-500)", "Large (500+)"
