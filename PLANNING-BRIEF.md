@@ -2,9 +2,9 @@
 
 **Author:** Samuel Muriuki
 **Date:** 02 May 2026
-**Status:** Awaiting approval before build starts
+**Status:** Phase 1 live in production (2026-05-05)
 **Target:** Acquisity application (Sr Full-Stack Engineer — Next.js / AI)
-**Live target URL:** `outbound-lab.vercel.app`
+**Live URL:** `outbound-lab-acquisity.vercel.app`
 **Repo:** `github.com/Samuel-Muriuki/outbound-lab-acquisity` (public)
 
 ---
@@ -65,7 +65,7 @@ Most candidate portfolios fail at one or the other. OutboundLab is engineered to
 
 She receives a LinkedIn DM with one link.
 
-1. Clicks `outbound-lab.vercel.app`
+1. Clicks `outbound-lab-acquisity.vercel.app`
 2. Lands on a clean dark-themed landing page. Hero CTA: **"Try it on Acquisity."**
 3. Clicks that CTA. URL pre-fills as `acquisity.com`.
 4. Watches in real time as the agent narrates: *"Researching Acquisity... found their site... reading product page... identifying ICP... finding decision makers..."*
@@ -606,7 +606,7 @@ This must be free or near-free. The whole project should run on free tiers.
 | Results card UI | Renders the final JSON cleanly | ✨ feat(results): research result card with sources and email |
 | Error states | "Couldn't reach that URL" graceful handling | 🐛 fix(api): graceful error handling for invalid URLs |
 | One Playwright E2E test | `pnpm test:e2e` passes against production URL | 🧪 test(e2e): full research flow on production |
-| Vercel deploy + custom subdomain | Live at outbound-lab.vercel.app | 🚀 deploy: production Vercel configuration |
+| Vercel deploy + custom subdomain | Live at outbound-lab-acquisity.vercel.app | 🚀 deploy: production Vercel configuration |
 | README v1 | What / why / stack / how to run / decision log | 📝 docs: README v1 with decision log |
 
 **Phase 1 quality gate:** Run the Playwright test on production. If green, Phase 1 ships. Send link to Tasnim.
@@ -662,7 +662,7 @@ This must be free or near-free. The whole project should run on free tiers.
 | R7 | Agent 2 returns fabricated people | High | Catastrophic | Hard rule in system prompt: real people only. Validate every name against at least one source URL before showing. |
 | R8 | "Run on Acquisity" returns embarrassing output | High | High | Test on Acquisity in development before deploying. If output is bad, iterate prompts before shipping the public link. |
 | R9 | Free-tier quotas (Groq 14.4k/day, Gemini 1.5k/day, OpenRouter ~50/day) all exhausted simultaneously | Low | Medium | Three-provider fallback chain keeps the demo running until at least one tier remains. Rate limit by IP from Phase 1. If all three tiers go red, app shows "demo capacity reached. Try again in an hour." rather than erroring. No paid provider is added — free-tier resilience is part of the demo's value proposition. |
-| R10 | Domain `outbound-lab.vercel.app` not memorable | Low | Low | Acceptable for v1. Buy `outbound-lab.com` ($12) only if the project keeps gaining traction. |
+| R10 | Domain `outbound-lab-acquisity.vercel.app` not memorable | Low | Low | Acceptable for v1. Buy `outbound-lab.com` ($12) only if the project keeps gaining traction. |
 
 ---
 

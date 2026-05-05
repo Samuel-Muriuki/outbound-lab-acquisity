@@ -5,7 +5,7 @@ import { isPrivateHostname } from "@/lib/validation/research-input";
 
 const FETCH_TIMEOUT_MS = 8_000;
 const MAX_OUTPUT_CHARS = 4_000;
-const USER_AGENT = "OutboundLab/1.0 (research bot; +https://outbound-lab.vercel.app)";
+const USER_AGENT = "OutboundLab/1.0 (research bot; +https://outbound-lab-acquisity.vercel.app)";
 
 const WebFetchInput = z.object({
   url: z

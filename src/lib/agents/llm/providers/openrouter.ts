@@ -33,7 +33,7 @@ export function createOpenRouterProvider(): LLMProvider {
         baseURL: OPENROUTER_BASE_URL,
         defaultHeaders: {
           "HTTP-Referer":
-            process.env.NEXT_PUBLIC_APP_URL ?? "https://outbound-lab.vercel.app",
+            process.env.NEXT_PUBLIC_APP_URL ?? "https://outbound-lab-acquisity.vercel.app",
           "X-Title": "OutboundLab",
         },
       })

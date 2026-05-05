@@ -6,7 +6,7 @@ import { SiteFooter } from "@/components/site-footer";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://outbound-lab.vercel.app";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://outbound-lab-acquisity.vercel.app";
 const TITLE = "OutboundLab — Multi-agent B2B research";
 const DESCRIPTION =
   "Paste any company URL and get a personalised outreach package in under a minute — researched by AI, not templated.";
