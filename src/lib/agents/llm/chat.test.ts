@@ -123,6 +123,39 @@ describe("chat() fallback chain", () => {
     expect(gemini.chat).not.toHaveBeenCalled();
   });
 
+  it("falls through on Groq tool_use_failed (400 with code in body)", async () => {
+    const toolUseFailed = Object.assign(
+      new Error("Failed to call a function. Please adjust your prompt."),
+      {
+        status: 400,
+        error: { code: "tool_use_failed", failed_generation: "<tool_call>...</tool_call>" },
+      }
+    );
+    const groq = fakeProvider("groq", { kind: "throw", error: toolUseFailed });
+    const gemini = fakeProvider("gemini", { kind: "ok" });
+    setProviders(groq, gemini);
+
+    const result = await chat(baseOpts);
+    expect(result.provider).toBe("gemini");
+    expect(groq.chat).toHaveBeenCalledOnce();
+    expect(gemini.chat).toHaveBeenCalledOnce();
+  });
+
+  it("falls through on Groq tool_use_failed via message regex (no body code)", async () => {
+    // Defensive: if the body isn't shaped as expected, the message regex
+    // still classifies the error correctly.
+    const toolUseFailed = Object.assign(
+      new Error("400 Failed to call a function. Please adjust your prompt."),
+      { status: 400 }
+    );
+    const groq = fakeProvider("groq", { kind: "throw", error: toolUseFailed });
+    const gemini = fakeProvider("gemini", { kind: "ok" });
+    setProviders(groq, gemini);
+
+    const result = await chat(baseOpts);
+    expect(result.provider).toBe("gemini");
+  });
+
   it("short-circuits on AbortError", async () => {
     const abort = Object.assign(new Error("Aborted"), { name: "AbortError" });
     const groq = fakeProvider("groq", { kind: "throw", error: abort });

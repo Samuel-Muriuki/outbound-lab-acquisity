@@ -46,6 +46,22 @@ export class AllProvidersFailedError extends Error {
 
 const RETRYABLE_HTTP_STATUS = new Set([408, 429, 500, 502, 503, 504]);
 
+/**
+ * Groq's `tool_use_failed` (HTTP 400) means Llama emitted a tool call
+ * Groq's own validator rejected. It's non-deterministic — Gemini handles
+ * tool calls differently and usually succeeds on the same prompt — so
+ * treat it as retryable to fall through the provider chain rather than
+ * surfacing a 400 to the user.
+ */
+function isToolUseFailed(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const status = (err as { status?: number }).status;
+  if (status !== 400) return false;
+  const body = (err as { error?: { code?: unknown } }).error;
+  if (body && body.code === "tool_use_failed") return true;
+  return /failed to call a function/i.test(err.message);
+}
+
 function isRetryable(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
   if (err.name === "AbortError") return false;
@@ -53,6 +69,7 @@ function isRetryable(err: unknown): boolean {
   if (typeof status === "number" && RETRYABLE_HTTP_STATUS.has(status)) {
     return true;
   }
+  if (isToolUseFailed(err)) return true;
   return /rate.?limit|quota|exhaust|unavail|timeout|fetch failed|ECONNRESET|ETIMEDOUT/i.test(
     err.message
   );
