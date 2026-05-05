@@ -8,6 +8,7 @@ import {
   type UseResearchStreamArgs,
 } from "@/hooks/use-research-stream";
 import { DeleteRunButton } from "@/components/delete-run-button";
+import { InteractiveBackground } from "@/components/interactive-background";
 import { AgentTimeline } from "./agent-timeline";
 import { ResultCard } from "./result-card";
 
@@ -86,10 +87,12 @@ export function ResearchView({
     (stream.agents[3].durationMs ?? 0);
 
   return (
-    <main
-      id="main"
-      className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-12 sm:px-6 lg:px-8"
-    >
+    <>
+      <InteractiveBackground variant="aurora" />
+      <main
+        id="main"
+        className="relative z-10 mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-12 sm:px-6 lg:px-8"
+      >
       <header className="flex items-center justify-between gap-4">
         <Link
           href="/"
@@ -196,6 +199,7 @@ export function ResearchView({
           <ResultCard result={stream.result} />
         </section>
       )}
-    </main>
+      </main>
+    </>
   );
 }

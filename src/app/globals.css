@@ -254,3 +254,90 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* ============================================
+ * Interactive background — spotlight variant
+ * ============================================
+ * Cursor-following radial gradient + click ripples. Driven by
+ * --mx / --my / --rx / --ry CSS custom properties set from JS by
+ * <InteractiveBackground variant="spotlight"> in
+ * src/components/interactive-background.tsx.
+ */
+.spotlight-bg {
+  background:
+    radial-gradient(
+      640px circle at var(--mx, 50vw) var(--my, 50vh),
+      hsl(217 91% 60% / 0.08),
+      hsl(199 89% 60% / 0.04) 30%,
+      transparent 70%
+    );
+  transition: background 80ms linear;
+}
+
+.spotlight-ripple {
+  position: absolute;
+  left: var(--rx, 50%);
+  top: var(--ry, 50%);
+  width: 0;
+  height: 0;
+  border-radius: 9999px;
+  transform: translate(-50%, -50%);
+  border: 1px solid hsl(217 91% 60% / 0.6);
+  pointer-events: none;
+  opacity: 0;
+}
+.spotlight-ripple[data-state="on"] {
+  animation: spotlight-ripple-out 700ms ease-out forwards;
+}
+@keyframes spotlight-ripple-out {
+  0%   { width: 0; height: 0; opacity: 0.6; border-width: 2px; }
+  100% { width: 240px; height: 240px; opacity: 0; border-width: 1px; }
+}
+
+/* ============================================
+ * Interactive background — aurora variant
+ * ============================================
+ * Three slow-drifting blobs, no JS / no listeners. Used on the
+ * streaming view where a cursor follower would compete with the
+ * tool-call timeline.
+ */
+.aurora-blob {
+  position: absolute;
+  width: 60vmax;
+  height: 60vmax;
+  border-radius: 9999px;
+  filter: blur(80px);
+  opacity: 0.18;
+  pointer-events: none;
+  will-change: transform;
+}
+.aurora-blob-1 {
+  background: radial-gradient(circle, hsl(217 91% 60%), transparent 70%);
+  top: -20vmax;
+  left: -20vmax;
+  animation: aurora-drift-1 24s ease-in-out infinite;
+}
+.aurora-blob-2 {
+  background: radial-gradient(circle, hsl(199 89% 60%), transparent 70%);
+  bottom: -20vmax;
+  right: -20vmax;
+  animation: aurora-drift-2 30s ease-in-out infinite;
+}
+.aurora-blob-3 {
+  background: radial-gradient(circle, hsl(263 70% 60%), transparent 70%);
+  top: 30vmax;
+  left: 40vmax;
+  animation: aurora-drift-3 36s ease-in-out infinite;
+}
+@keyframes aurora-drift-1 {
+  0%, 100% { transform: translate(0, 0); }
+  50%      { transform: translate(20vmax, 10vmax); }
+}
+@keyframes aurora-drift-2 {
+  0%, 100% { transform: translate(0, 0); }
+  50%      { transform: translate(-20vmax, -10vmax); }
+}
+@keyframes aurora-drift-3 {
+  0%, 100% { transform: translate(0, 0); }
+  50%      { transform: translate(10vmax, -20vmax); }
+}
