@@ -9,6 +9,7 @@ import {
 } from "@/hooks/use-research-stream";
 import { DeleteRunButton } from "@/components/delete-run-button";
 import { DotFieldBackground } from "@/components/backgrounds/dot-field-background";
+import { TiltedWrapper } from "@/components/tilted-wrapper";
 import { AgentTimeline } from "./agent-timeline";
 import { ResultCard } from "./result-card";
 
@@ -216,9 +217,14 @@ function ResultSection({ result }: { result: NonNullable<ReturnType<typeof useRe
     });
   }, []);
 
+  // ResultCard is the page's centerpiece — keep the tilt very mild
+  // (rotateAmplitude=3) so it whispers rather than waves around while
+  // the visitor is reading the email body or clicking tabs.
   return (
     <section ref={sectionRef} className="mt-10 scroll-mt-12">
-      <ResultCard result={result} />
+      <TiltedWrapper rotateAmplitude={3} scaleOnHover={1.005}>
+        <ResultCard result={result} />
+      </TiltedWrapper>
     </section>
   );
 }

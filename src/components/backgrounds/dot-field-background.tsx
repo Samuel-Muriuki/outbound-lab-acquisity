@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useSyncExternalStore } from "react";
+import { useEffect, useId, useMemo, useRef, useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
 
 /**
@@ -10,9 +10,9 @@ import { useTheme } from "next-themes";
  * Adaptations from the original:
  *  - TypeScript-strict
  *  - useSyncExternalStore mount gate (no canvas attach during SSR)
- *  - Theme-aware gradientFrom / gradientTo / glowColor — light theme
- *    gets darker dots over the page; dark theme gets brand-cyan dots
- *    glowing against zinc-950
+ *  - Theme-aware 3-stop diagonal gradient (cyan → blue → purple) — light
+ *    theme uses the same stops at lower saturation so dots stay readable
+ *    over the white page bg; dark theme glows over zinc-950
  *  - Dropped the unused mouse-physics (`bulgeOnly: true` is the only
  *    mode we use). Cleans up the inner loop substantially.
  *  - Honours prefers-reduced-motion: dots stay static, glow stays off
@@ -61,13 +61,30 @@ export function DotFieldBackground({
   // react-hooks/refs lint rule that flags reading refs during render.
   const glowId = useId().replace(/:/g, "");
 
-  // Per-theme palette. Dark uses brand cyan→blue with a soft cyan glow;
-  // light uses muted zinc with a faint blue glow so dots stay readable
-  // over the white page bg.
+  // Per-theme palette. Three-stop diagonal gradient (top-left → middle →
+  // bottom-right) so the dot field reads as a colour sweep across the
+  // page rather than a flat tint. Brand: cyan-400 → blue-500 → purple-500
+  // in dark; light gets the same hues at lower saturation so dots stay
+  // readable over the white page bg without overpowering the foreground.
   const isLight = resolvedTheme === "light";
-  const gradientFrom = isLight ? "rgba(82, 82, 91, 0.45)" : "rgba(34, 211, 238, 0.32)";
-  const gradientTo = isLight ? "rgba(161, 161, 170, 0.30)" : "rgba(59, 130, 246, 0.22)";
-  const glowColor = isLight ? "rgba(59, 130, 246, 0.18)" : "rgba(34, 211, 238, 0.22)";
+  // Memoised so the useEffect deps array stays referentially stable
+  // across re-renders that don't actually change the theme.
+  const gradientStops = useMemo<ReadonlyArray<readonly [number, string]>>(
+    () =>
+      isLight
+        ? [
+            [0, "rgba(34, 211, 238, 0.55)"],   // cyan
+            [0.5, "rgba(59, 130, 246, 0.45)"], // blue
+            [1, "rgba(168, 85, 247, 0.40)"],   // purple
+          ]
+        : [
+            [0, "rgba(34, 211, 238, 0.55)"],
+            [0.5, "rgba(59, 130, 246, 0.45)"],
+            [1, "rgba(168, 85, 247, 0.50)"],
+          ],
+    [isLight]
+  );
+  const glowColor = isLight ? "rgba(59, 130, 246, 0.22)" : "rgba(34, 211, 238, 0.28)";
 
   useEffect(() => {
     if (!mounted) return;
@@ -160,8 +177,9 @@ export function DotFieldBackground({
       if (!ctx) return;
       ctx.clearRect(0, 0, size.w, size.h);
       const grad = ctx.createLinearGradient(0, 0, size.w, size.h);
-      grad.addColorStop(0, gradientFrom);
-      grad.addColorStop(1, gradientTo);
+      for (const [offset, color] of gradientStops) {
+        grad.addColorStop(offset, color);
+      }
       ctx.fillStyle = grad;
 
       const cr = cursorRadius;
@@ -200,8 +218,9 @@ export function DotFieldBackground({
       if (!ctx) return;
       ctx.clearRect(0, 0, size.w, size.h);
       const grad = ctx.createLinearGradient(0, 0, size.w, size.h);
-      grad.addColorStop(0, gradientFrom);
-      grad.addColorStop(1, gradientTo);
+      for (const [offset, color] of gradientStops) {
+        grad.addColorStop(offset, color);
+      }
       ctx.fillStyle = grad;
       const rad = dotRadius / 2;
       ctx.beginPath();
@@ -235,8 +254,7 @@ export function DotFieldBackground({
     dotSpacing,
     cursorRadius,
     bulgeStrength,
-    gradientFrom,
-    gradientTo,
+    gradientStops,
   ]);
 
   // Defer the SVG render until the theme resolves on the client. The
