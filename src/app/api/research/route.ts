@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { url } = parsed.data;
+  const { url, tone } = parsed.data;
   const target_domain = normaliseDomain(url);
 
   // Cloudflare Family DNS gate — catches NSFW brand domains (onlyfans,
@@ -98,6 +98,7 @@ export async function POST(request: NextRequest) {
       target_domain,
       status: "pending",
       creator_session_id: sessionId,
+      tone,
     })
     .select("id")
     .single();

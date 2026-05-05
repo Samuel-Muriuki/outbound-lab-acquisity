@@ -40,6 +40,14 @@ export function isPrivateHostname(hostname: string): boolean {
  *  - Rejects private addresses to block SSRF / abuse
  *  - Rejects non-http(s) schemes (file://, javascript:, data:, etc.)
  */
+/**
+ * Tones Agent 3 can render. Keep this aligned with
+ * `src/lib/agents/agent-3-email.ts:RunAgent3Options.tone` and the
+ * `tone` CHECK constraint on the `research_runs` table.
+ */
+export const ResearchTone = z.enum(["cold", "warm"]);
+export type ResearchToneT = z.infer<typeof ResearchTone>;
+
 export const ResearchInput = z.object({
   url: z
     .string()
@@ -55,7 +63,7 @@ export const ResearchInput = z.object({
     .pipe(
       z
         .string()
-        .url({ message: "Enter a valid URL like https://acquisity.ai." })
+        .url({ message: "Enter a valid URL like https://www.acquisity.ai/." })
     )
     .refine(
       (value) => {
@@ -78,6 +86,7 @@ export const ResearchInput = z.object({
       },
       { message: BLOCKED_MESSAGE }
     ),
+  tone: ResearchTone.optional().default("cold"),
 });
 
 export type ResearchInputT = z.infer<typeof ResearchInput>;
