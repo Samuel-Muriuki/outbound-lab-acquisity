@@ -39,7 +39,7 @@ test.describe("OutboundLab landing — Phase 1 smoke @phase1", () => {
 
     // URL input + Research button
     await expect(
-      page.getByPlaceholder("https://acquisity.ai")
+      page.getByPlaceholder("https://www.acquisity.ai/")
     ).toBeVisible();
     await expect(page.getByRole("button", { name: /research/i })).toBeVisible();
 
@@ -51,7 +51,7 @@ test.describe("OutboundLab landing — Phase 1 smoke @phase1", () => {
 
   test("inline error appears on invalid URL submit", async ({ page }) => {
     await page.goto("/");
-    const input = page.getByPlaceholder("https://acquisity.ai");
+    const input = page.getByPlaceholder("https://www.acquisity.ai/");
     // 127.0.0.1 reliably trips the private-hostname refine (the
     // browser URL parser would otherwise auto-recover from many other
     // malformed inputs, e.g. it strips spaces and re-parses, hiding
@@ -69,7 +69,7 @@ test.describe("OutboundLab landing — Phase 1 smoke @phase1", () => {
     // Move focus off the input to start with
     await page.locator("body").click();
     await page.keyboard.press("/");
-    await expect(page.getByPlaceholder("https://acquisity.ai")).toBeFocused();
+    await expect(page.getByPlaceholder("https://www.acquisity.ai/")).toBeFocused();
   });
 
   test("non-existent run id renders the branded 404 page", async ({ page }) => {
