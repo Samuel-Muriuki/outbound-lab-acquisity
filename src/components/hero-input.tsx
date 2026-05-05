@@ -17,6 +17,8 @@ import {
   type ResearchChannelT,
   type ResearchToneT,
 } from "@/lib/validation/research-input";
+import { trpc } from "@/lib/trpc/client";
+import { TRPCClientError } from "@trpc/client";
 import { cn } from "@/lib/utils";
 
 const ACQUISITY_PRESET = "https://www.acquisity.ai/";
@@ -27,15 +29,10 @@ const ACQUISITY_PRESET = "https://www.acquisity.ai/";
  */
 const PRESET_AUTOSUBMIT_DELAY_MS = 600;
 
-interface PostResearchResponse {
-  run_id?: string;
-  error?: string;
-  issues?: Array<{ path: string; message: string }>;
-}
-
 /**
- * Hero URL input. Validates client-side, POSTs to `/api/research`, then
- * navigates to `/research/[id]` on success.
+ * Hero URL input. Validates client-side, calls the
+ * `research.create` tRPC mutation, then navigates to `/research/[id]`
+ * on success.
  *
  * Visual states per `.ai/docs/12-ux-flows.md` §1.4:
  *   idle      → border-border, no ring
@@ -91,39 +88,23 @@ export function HeroInput() {
     setError(null);
     startSubmit(async () => {
       try {
-        const response = await fetch("/api/research", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            url: result.data.url,
-            tone: result.data.tone,
-            channel: result.data.channel,
-          }),
+        const { run_id } = await trpc.research.create.mutate({
+          url: result.data.url,
+          tone: result.data.tone,
+          channel: result.data.channel,
         });
-        const body: PostResearchResponse = await response
-          .json()
-          .catch(() => ({}));
-
-        if (!response.ok) {
-          const message =
-            body.issues?.[0]?.message ??
-            body.error ??
-            "Could not start research. Try again.";
-          setError(message);
-          return;
-        }
-
-        if (!body.run_id) {
-          setError("Server returned an unexpected response. Try again.");
-          return;
-        }
-
-        router.push(`/research/${body.run_id}`);
+        router.push(`/research/${run_id}`);
         // Intentionally NOT clearing `isSubmitting` — the loading state
         // stays on through the route transition until the destination
         // page mounts.
-      } catch {
-        setError("Connection lost. Check your network and try again.");
+      } catch (err) {
+        if (err instanceof TRPCClientError) {
+          // Server-thrown TRPCError messages are user-safe (validation
+          // copy, "Could not create research run", etc.).
+          setError(err.message || "Could not start research. Try again.");
+        } else {
+          setError("Connection lost. Check your network and try again.");
+        }
       }
     });
   }
