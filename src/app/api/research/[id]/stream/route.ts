@@ -1,7 +1,28 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { runResearch } from "@/lib/agents/orchestrator";
+import {
+  getAgentDoneMessages,
+  getRunStatus,
+  type AgentMessageRow,
+} from "@/lib/db/queries";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
-import type { StreamEvent } from "@/lib/agents/stream-events";
+import type { AgentIndex, StreamEvent } from "@/lib/agents/stream-events";
+
+/** Poll interval for the re-attach path (ms). Long enough not to thrash
+ *  the DB, short enough that the visitor sees agent transitions inside
+ *  a few seconds of the orchestrator emitting them. */
+const REATTACH_POLL_INTERVAL_MS = 1500;
+
+/** Hard ceiling on the re-attach loop. The route handler is also bounded
+ *  by `maxDuration` (90s); this keeps the loop from running right up to
+ *  the kill line if Vercel's timer drifts. */
+const REATTACH_MAX_LOOP_MS = 80_000;
+
+const AGENT_NAMES: Record<AgentIndex, string> = {
+  1: "Reconnaissance",
+  2: "People & ICP",
+  3: "Personalisation & Outreach",
+};
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,18 +56,20 @@ interface ExistingRunRow {
  *
  * Status semantics:
  *   pending  → start the orchestrator
- *   running  → an SSE consumer is already attached upstream; reject 409 to
- *              prevent double-runs (defensive — the route handler is the
- *              only place orchestration kicks off, so this should never
- *              fire under normal use)
+ *   running  → re-attach: replay completed agents from research_messages,
+ *              then poll the row + messages until status flips. The
+ *              orchestrator runs on a separate Vercel function instance
+ *              (the original POST → first-stream lifecycle); we observe
+ *              its progress through the DB rather than re-attaching
+ *              in-process (which serverless can't do).
  *   done     → ship the cached result.payload as a single final_result frame
  *   error    → ship a single error frame with the persisted message
  *   degraded → same as done — result is still valid; UI surfaces the banner
  *
  * Connection-loss handling: if the client disconnects mid-stream the
  * orchestrator continues running (the run row gets persisted at the end
- * regardless). The next client load of /research/[id] picks up the
- * `done` state and streams `final_result` from the row.
+ * regardless). The next client load of /research/[id] picks up where
+ * progress left off via the re-attach path above.
  */
 export async function GET(
   _request: NextRequest,
@@ -118,12 +141,11 @@ export async function GET(
   }
 
   if (run.status === "running") {
-    // Another stream is presumably attached. Defensive 409 — the
-    // streaming page only opens one EventSource per id under normal use.
-    return NextResponse.json(
-      { error: "This run is already streaming elsewhere." },
-      { status: 409 }
-    );
+    // Re-attach path: the orchestrator is running on the original
+    // Vercel instance (or already finished and just hasn't been
+    // re-fetched here yet). Replay completed agents from the messages
+    // log, then poll until status flips out of 'running'.
+    return makeSseResponse(() => replayAndPoll(id));
   }
 
   // status === 'pending' — start the orchestrator.
@@ -133,6 +155,82 @@ export async function GET(
       channel: run!.channel,
     })
   );
+}
+
+/**
+ * Async generator for the running-run re-attach path. Yields events
+ * shaped exactly like the orchestrator's live stream so the existing
+ * useResearchStream hook on the client can consume them unchanged.
+ *
+ *   1. Fetch all completed agents from research_messages
+ *   2. Yield agent_start + agent_done for each (in order)
+ *   3. Loop: poll status + messages every REATTACH_POLL_INTERVAL_MS
+ *      - new agent_done rows → yield agent_start + agent_done
+ *      - status === 'done' / 'degraded' → yield final_result, return
+ *      - status === 'error' → yield error, return
+ *      - exceed REATTACH_MAX_LOOP_MS → return cleanly (next reload picks up)
+ *
+ * Tool-call + agent_thinking events are NOT replayed — the messages
+ * log only persists per-agent assistant outputs. The visitor sees
+ * each agent flip from pending straight to done; that's a worse but
+ * acceptable visual than a stale 409 error.
+ */
+async function* replayAndPoll(runId: string): AsyncGenerator<StreamEvent> {
+  const replayed = new Set<AgentIndex>();
+
+  function eventsForAgentRow(row: AgentMessageRow): StreamEvent[] {
+    const agent = row.agent_index as AgentIndex;
+    return [
+      { type: "agent_start", agent, name: AGENT_NAMES[agent] ?? row.agent_name },
+      {
+        type: "agent_done",
+        agent,
+        output: row.content,
+        duration_ms: row.duration_ms ?? 0,
+      },
+    ];
+  }
+
+  const initial = await getAgentDoneMessages(runId);
+  for (const row of initial) {
+    const agent = row.agent_index as AgentIndex;
+    if (replayed.has(agent)) continue;
+    for (const ev of eventsForAgentRow(row)) yield ev;
+    replayed.add(agent);
+  }
+
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < REATTACH_MAX_LOOP_MS) {
+    await new Promise((resolve) =>
+      setTimeout(resolve, REATTACH_POLL_INTERVAL_MS)
+    );
+
+    const latest = await getAgentDoneMessages(runId);
+    for (const row of latest) {
+      const agent = row.agent_index as AgentIndex;
+      if (replayed.has(agent)) continue;
+      for (const ev of eventsForAgentRow(row)) yield ev;
+      replayed.add(agent);
+    }
+
+    const status = await getRunStatus(runId);
+    if (!status) continue;
+    if (status.status === "done" || status.status === "degraded") {
+      yield { type: "final_result", payload: status.result } satisfies StreamEvent;
+      return;
+    }
+    if (status.status === "error") {
+      yield {
+        type: "error",
+        stage: "persisted",
+        message: status.error_message ?? "Research failed.",
+      } satisfies StreamEvent;
+      return;
+    }
+  }
+  // Hit the loop ceiling without the run finishing — bail cleanly.
+  // The client's EventSource auto-reconnects, which lands us back on
+  // the same re-attach path with the latest replay state.
 }
 
 /**
