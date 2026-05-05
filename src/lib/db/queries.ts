@@ -127,6 +127,61 @@ export async function getRecentRuns(limit: number): Promise<RecentRunRow[]> {
   });
 }
 
+export interface InFlightRunRow {
+  id: string;
+  target_domain: string;
+  status: "pending" | "running";
+  started_at: string;
+}
+
+/**
+ * Pending + running rows belonging to the current visitor's session.
+ * Powers the "still working" banner on the home page so a visitor who
+ * navigates back mid-run can see + click straight back to the
+ * streaming view rather than thinking the run was lost.
+ *
+ * Cookie-scoped via `creator_session_id` so other visitors never see
+ * each other's in-flight work.
+ *
+ * Returns an empty array silently on any DB / config error — the
+ * banner is a best-effort affordance, never a blocker.
+ */
+export async function getInFlightRunsForSession(
+  sessionId: string,
+  limit = 5
+): Promise<InFlightRunRow[]> {
+  if (!sessionId) return [];
+  let supabase;
+  try {
+    supabase = getSupabaseAdmin();
+  } catch {
+    return [];
+  }
+  const { data, error } = await supabase
+    .from("research_runs")
+    .select("id, target_domain, status, started_at")
+    .in("status", ["pending", "running"])
+    .eq("creator_session_id", sessionId)
+    .order("started_at", { ascending: false })
+    .limit(limit);
+
+  if (error || !data) {
+    if (error) {
+      console.warn("[getInFlightRunsForSession] Supabase error:", error.message);
+    }
+    return [];
+  }
+
+  return data.map(
+    (row): InFlightRunRow => ({
+      id: row.id as string,
+      target_domain: row.target_domain as string,
+      status: row.status as InFlightRunRow["status"],
+      started_at: row.started_at as string,
+    })
+  );
+}
+
 export interface SearchRunsArgs {
   /** Free-text query — matches target_domain or recon.company_name (case-insensitive substring). */
   query?: string;

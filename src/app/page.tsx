@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { HeroInput } from "@/components/hero-input";
 import { OrbBackground } from "@/components/backgrounds/orb-background";
+import { InFlightRunsBanner } from "@/components/landing/in-flight-runs-banner";
 import { RecentRunsPreview } from "@/components/landing/recent-runs-preview";
 
 export const dynamic = "force-dynamic";
@@ -40,6 +41,10 @@ export default function HomePage() {
           <HeroInput />
         </div>
       </section>
+
+      <Suspense fallback={null}>
+        <InFlightRunsBanner />
+      </Suspense>
 
       <Suspense fallback={null}>
         <RecentRunsPreview />
