@@ -365,6 +365,13 @@ function EmailPanel({ result, runId }: ResultCardProps) {
         ) : null}
       </dl>
 
+      {channel === "email" && (
+        <p className="mt-2 text-xs text-subtle-foreground">
+          Recipient email not auto-populated — find via LinkedIn or the
+          company&apos;s contact page before sending.
+        </p>
+      )}
+
       <hr className="my-4 border-border" />
 
       <p
