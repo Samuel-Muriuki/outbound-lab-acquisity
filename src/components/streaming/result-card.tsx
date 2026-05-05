@@ -40,7 +40,7 @@ export function ResultCard({ result }: ResultCardProps) {
   const { recon, people, degraded, forbiddenReason } = result;
 
   return (
-    <article className="rounded-xl border border-border bg-surface-1 p-6">
+    <article className="glass-card rounded-xl border border-border p-6">
       <header>
         <div className="flex items-start justify-between gap-4">
           <div>
