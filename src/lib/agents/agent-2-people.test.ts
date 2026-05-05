@@ -102,14 +102,12 @@ afterEach(() => {
 });
 
 describe("runAgent2()", () => {
-  it("returns a Zod-validated PeopleOutput when the LinkedIn slug matches (no fetch needed)", async () => {
+  it("auto-accepts a DM when the source URL is on the target domain (no fetch needed)", async () => {
     chatMock.mockResolvedValueOnce(
       makeChatResult({ text: JSON.stringify(VALID_OUTPUT) })
     );
-    // VALID_OUTPUT.linkedin_url is `https://linkedin.com/in/tasnim-a` —
-    // its slug contains "tasnim" so the fast-path validates without
-    // ever fetching the source page. Mock fetch to make sure it's NOT
-    // called.
+    // VALID_OUTPUT source_url is https://acquisity.ai/team — host
+    // matches RECON_BRIEF.sources[0] hostname → Tier 1 accept, no fetch.
 
     const { emit, events } = captureEvents();
     const out = await runAgent2(RECON_BRIEF, "run-id", emit);
@@ -119,8 +117,30 @@ describe("runAgent2()", () => {
     expect(events.find((e) => e.type === "provider_used")).toBeDefined();
   });
 
-  it("falls back to source_url fetch when neither URL slug matches the name", async () => {
-    // Name + URLs that won't pass the slug check, so fetch IS the gate.
+  it("auto-accepts subdomains of the target (e.g. blog.acquisity.ai)", async () => {
+    chatMock.mockResolvedValueOnce(
+      makeChatResult({
+        text: JSON.stringify({
+          ...VALID_OUTPUT,
+          decision_makers: [
+            {
+              name: "Tasnim A.",
+              role: "Global TA Leader",
+              why_them: "Cited on the Acquisity engineering blog.",
+              source_url: "https://blog.acquisity.ai/why-we-hire",
+              linkedin_url: null,
+            },
+          ],
+        }),
+      })
+    );
+    const { emit } = captureEvents();
+    const out = await runAgent2(RECON_BRIEF, "run-id", emit);
+    expect(out.decision_makers).toHaveLength(1);
+    expect(webFetchExecute).not.toHaveBeenCalled();
+  });
+
+  it("accepts a cross-domain source when body has BOTH name and target company name", async () => {
     chatMock.mockResolvedValueOnce(
       makeChatResult({
         text: JSON.stringify({
@@ -129,39 +149,74 @@ describe("runAgent2()", () => {
             {
               name: "Marcus Reed",
               role: "Head of Sales",
-              why_them: "Owns sales hiring strategy at Acquisity.",
-              source_url: "https://acquisity.ai/team",
+              why_them: "Profiled on a third-party tech blog.",
+              source_url: "https://techcrunch.com/2026/04/acquisity-feature",
               linkedin_url: null,
             },
           ],
         }),
       })
     );
-    // Page content includes the name → kept via the fallback fetch path.
     webFetchExecute.mockResolvedValue(
-      "Marcus Reed is the Head of Sales at Acquisity."
+      "Marcus Reed leads sales at Acquisity, the AI-powered B2B growth system."
     );
 
     const { emit } = captureEvents();
     const out = await runAgent2(RECON_BRIEF, "run-id", emit);
     expect(out.decision_makers).toHaveLength(1);
     expect(webFetchExecute).toHaveBeenCalledWith({
-      url: "https://acquisity.ai/team",
+      url: "https://techcrunch.com/2026/04/acquisity-feature",
     });
   });
 
-  it("drops a decision maker whose name does not appear in the source URL", async () => {
+  it("DROPS a cross-domain DM when the body has the name but NOT the target company name (Hormozi-style cross-company)", async () => {
+    // Regression guard: this mirrors the live 2026-05-05 bug where
+    // Leila Hormozi was returned as an Acquisity DM because her
+    // LinkedIn slug matched her name. The new gate requires the
+    // target's company name to also appear in the source body.
     chatMock.mockResolvedValueOnce(
       makeChatResult({
         text: JSON.stringify({
           ...VALID_OUTPUT,
           decision_makers: [
-            VALID_OUTPUT.decision_makers[0],
+            {
+              name: "Leila Hormozi",
+              role: "Founder and CEO of Acquisition.com",
+              why_them: "Mistakenly surfaced for Acquisity — actually runs Acquisition.com.",
+              source_url: "https://acquisition.com/team/leila",
+              linkedin_url: "https://linkedin.com/in/leilahormozi",
+            },
+          ],
+        }),
+      })
+    );
+    webFetchExecute.mockResolvedValue(
+      "Leila Hormozi is the Founder and CEO of Acquisition.com — a holding company..."
+    );
+
+    const { emit, events } = captureEvents();
+    const out = await runAgent2(RECON_BRIEF, "run-id", emit);
+    expect(out.decision_makers).toHaveLength(0);
+    const drop = events.find(
+      (e) =>
+        e.type === "agent_thinking" &&
+        (e as { delta: string }).delta.includes("Leila Hormozi") &&
+        (e as { delta: string }).delta.includes("does not mention target company")
+    );
+    expect(drop).toBeDefined();
+  });
+
+  it("drops a cross-domain DM when the body lacks the person's name", async () => {
+    chatMock.mockResolvedValueOnce(
+      makeChatResult({
+        text: JSON.stringify({
+          ...VALID_OUTPUT,
+          decision_makers: [
             {
               name: "Made Up Person",
               role: "VP Imaginary",
               why_them: "Fabricated by the model — should be dropped by validation.",
-              source_url: "https://acquisity.ai/team",
+              source_url: "https://techcrunch.com/2026/04/acquisity-launch",
               linkedin_url: null,
             },
           ],
@@ -169,23 +224,22 @@ describe("runAgent2()", () => {
       })
     );
     webFetchExecute.mockResolvedValue(
-      "Tasnim A. is on the Acquisity team page. No mention of any other people."
+      "Acquisity launched its growth platform last quarter. No mention of the fabricated person."
     );
 
     const { emit, events } = captureEvents();
     const out = await runAgent2(RECON_BRIEF, "run-id", emit);
-    expect(out.decision_makers).toHaveLength(1);
-    expect(out.decision_makers[0]!.name).toBe("Tasnim A.");
-    // agent_thinking event for the dropped fake
-    const dropMessage = events.find(
-      (e) => e.type === "agent_thinking" && (e as { delta: string }).delta.includes("Made Up Person")
+    expect(out.decision_makers).toHaveLength(0);
+    const drop = events.find(
+      (e) =>
+        e.type === "agent_thinking" &&
+        (e as { delta: string }).delta.includes("Made Up Person") &&
+        (e as { delta: string }).delta.includes("name not found")
     );
-    expect(dropMessage).toBeDefined();
+    expect(drop).toBeDefined();
   });
 
-  it("drops a decision maker when neither slug matches AND fetch fails", async () => {
-    // Use a name whose tokens won't match either URL's slug, then make
-    // the fetch throw — both validation paths fail, dm is dropped.
+  it("drops a cross-domain DM when the source fetch fails", async () => {
     chatMock.mockResolvedValueOnce(
       makeChatResult({
         text: JSON.stringify({
@@ -193,9 +247,9 @@ describe("runAgent2()", () => {
           decision_makers: [
             {
               name: "Marcus Reed",
-              role: "VP Imaginary",
-              why_them: "Won't survive validation — fetch will throw.",
-              source_url: "https://acquisity.ai/team",
+              role: "VP Sales",
+              why_them: "Won't survive validation — cross-domain source fetch throws.",
+              source_url: "https://linkedin.com/in/marcusreed",
               linkedin_url: null,
             },
           ],
@@ -203,7 +257,7 @@ describe("runAgent2()", () => {
       })
     );
     webFetchExecute.mockRejectedValue(
-      new Error("Could not fetch private or local addresses (192.168.0.1).")
+      new Error("Fetch failed: 403 Forbidden")
     );
 
     const { emit, events } = captureEvents();
@@ -213,7 +267,7 @@ describe("runAgent2()", () => {
       events.find(
         (e) =>
           e.type === "agent_thinking" &&
-          (e as { delta: string }).delta.includes("could not verify source")
+          (e as { delta: string }).delta.includes("could not fetch")
       )
     ).toBeDefined();
   });
