@@ -13,6 +13,17 @@ interface ResultCardProps {
 }
 
 /**
+ * Hide the company-size badge when Agent 1 returned "Unknown" — that's
+ * the schema-allowed sentinel for "no employee-count signal in the
+ * web research." A badge that just reads "Unknown" tells the recruiter
+ * nothing and clutters the header. Real values (e.g. "20-50 employees",
+ * "Small (<50)", "Medium (50-500)") still render.
+ */
+function isUnknownSize(value: string): boolean {
+  return value.trim().toLowerCase() === "unknown";
+}
+
+/**
  * The result card — the climax of the streaming view.
  *
  * Source of truth: `.ai/docs/12-ux-flows.md` §3.
@@ -40,9 +51,11 @@ export function ResultCard({ result }: ResultCardProps) {
               {recon.one_liner}
             </p>
           </div>
-          <Badge variant="outline" className="font-mono tabular-nums">
-            {recon.company_size_estimate}
-          </Badge>
+          {!isUnknownSize(recon.company_size_estimate) && (
+            <Badge variant="outline" className="font-mono tabular-nums">
+              {recon.company_size_estimate}
+            </Badge>
+          )}
         </div>
         {degraded && (
           <p
