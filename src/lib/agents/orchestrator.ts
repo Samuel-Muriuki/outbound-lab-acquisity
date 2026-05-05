@@ -15,9 +15,11 @@ import {
   degradeRun,
   failRun,
   findCachedRun,
+  insertEmbedding,
   markRunRunning,
   recordMessage,
 } from "@/lib/db/queries";
+import { composeEmbeddingInput, embedText } from "./embeddings/embed";
 
 /**
  * Final structured result the orchestrator persists to research_runs.result
@@ -196,6 +198,25 @@ export async function* runResearch(
           runId,
           result: payload,
           durationMs: totalDuration,
+        });
+      }
+
+      // Best-effort RAG sidecar: embed the recon brief + persist into
+      // research_embeddings. Powers the vector-similarity cache lookup.
+      // Failures here never fail the run — the user already has their
+      // result and the next call will fall back to exact-domain match.
+      const embeddingInput = composeEmbeddingInput({
+        companyName: recon.company_name,
+        oneLiner: recon.one_liner,
+        whatTheySell: recon.what_they_sell,
+        targetMarket: recon.target_market,
+      });
+      const vector = await embedText(embeddingInput);
+      if (vector) {
+        await insertEmbedding({
+          runId,
+          targetDomain: domain,
+          embedding: vector,
         });
       }
 

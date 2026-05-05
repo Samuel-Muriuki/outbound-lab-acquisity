@@ -519,3 +519,37 @@ export async function recordMessage(args: RecordMessageArgs): Promise<void> {
     );
   }
 }
+
+export interface InsertEmbeddingArgs {
+  runId: string;
+  targetDomain: string;
+  embedding: number[];
+}
+
+/**
+ * Insert a 768-dim embedding for a completed run. Best-effort — RLS is
+ * server-only so this uses the service-role client. Errors are
+ * console-warned, not thrown: an embedding write failing must never
+ * fail the run itself (the user has their result already).
+ *
+ * pgvector's PostgREST representation accepts the vector as a
+ * stringified array literal (`[0.1,0.2,...]`). Casting via the column
+ * type happens server-side.
+ */
+export async function insertEmbedding(
+  args: InsertEmbeddingArgs
+): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  const literal = `[${args.embedding.join(",")}]`;
+  const { error } = await supabase.from("research_embeddings").insert({
+    run_id: args.runId,
+    target_domain: args.targetDomain,
+    embedding: literal,
+  });
+  if (error) {
+    console.warn(
+      `[insertEmbedding] Could not insert embedding for run ${args.runId}:`,
+      error.message
+    );
+  }
+}
