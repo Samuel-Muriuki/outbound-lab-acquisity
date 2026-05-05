@@ -1,4 +1,5 @@
 import "server-only";
+import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, publicProcedure } from "../init";
 import {
@@ -9,6 +10,16 @@ import { BLOCKED_MESSAGE } from "@/lib/validation/profanity";
 import { isFamilyDnsBlocked } from "@/lib/validation/family-dns";
 import { getOrCreateSessionId } from "@/lib/session/cookie";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
+import { deleteRun } from "@/lib/db/queries";
+
+const RunIdInput = z.object({
+  id: z
+    .string()
+    .regex(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+      { message: "Invalid run id." }
+    ),
+});
 
 export const researchRouter = router({
   /**
@@ -79,5 +90,62 @@ export const researchRouter = router({
       }
 
       return { run_id: data.id as string };
+    }),
+
+  /**
+   * Delete a run created by the current visitor. Ownership check uses
+   * the read-only `outboundlab_sid` cookie compared against the row's
+   * `creator_session_id`.
+   *
+   * Replaces the old `DELETE /api/research/[id]` route handler. Same
+   * contract:
+   *   BAD_REQUEST          → invalid UUID
+   *   UNAUTHORIZED         → no session cookie present
+   *   NOT_FOUND            → no row with that id
+   *   FORBIDDEN            → cookie doesn't match the row's creator
+   *   INTERNAL_SERVER_ERROR → DB error
+   *
+   * Returns `{ ok: true }` on success — the client only needs to know
+   * the call succeeded.
+   */
+  delete: publicProcedure
+    .input(RunIdInput)
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.sessionId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message:
+            "No session — you can only delete runs you created in this browser.",
+        });
+      }
+
+      let result;
+      try {
+        result = await deleteRun(input.id, ctx.sessionId);
+      } catch (err) {
+        console.error(
+          "[trpc research.delete] deleteRun threw:",
+          err instanceof Error ? err.message : err
+        );
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Could not delete this run. Try again.",
+        });
+      }
+
+      if (result === "not_found") {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Run not found.",
+        });
+      }
+      if (result === "forbidden") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You can only delete runs you created.",
+        });
+      }
+
+      return { ok: true as const };
     }),
 });

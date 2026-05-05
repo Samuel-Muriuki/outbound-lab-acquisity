@@ -4,6 +4,8 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { TRPCClientError } from "@trpc/client";
+import { trpc } from "@/lib/trpc/client";
 import { cn } from "@/lib/utils";
 
 export interface DeleteRunButtonProps {
@@ -20,7 +22,8 @@ export interface DeleteRunButtonProps {
 }
 
 /**
- * Issues DELETE /api/research/[id], showing a confirm prompt first.
+ * Calls the `research.delete` tRPC mutation, showing a confirm prompt
+ * first.
  *
  * Confirmation is a sonner toast with Delete/Cancel action buttons —
  * keeps the experience inside the app's brand voice (dark Geist surface
@@ -28,9 +31,9 @@ export interface DeleteRunButtonProps {
  * `window.confirm` dialog. The toast auto-dismisses on either click;
  * clicking outside the toast cancels by inaction.
  *
- * The endpoint validates the visitor's `outboundlab_sid` cookie against
+ * The mutation validates the visitor's `outboundlab_sid` cookie against
  * the row's `creator_session_id`. The button itself only renders when
- * the server has already confirmed `isOwner` — the API call is the
+ * the server has already confirmed `isOwner` — the call is the
  * authoritative check, this is just a UX gate to avoid an unnecessary
  * request in the happy path.
  */
@@ -46,16 +49,7 @@ export function DeleteRunButton({
   function performDelete() {
     startTransition(async () => {
       try {
-        const response = await fetch(`/api/research/${runId}`, {
-          method: "DELETE",
-        });
-        if (!response.ok) {
-          const body = (await response.json().catch(() => ({}))) as {
-            error?: string;
-          };
-          toast.error(body.error ?? "Could not delete run.");
-          return;
-        }
+        await trpc.research.delete.mutate({ id: runId });
         toast.success("Run deleted", {
           description: "The research run and its agent messages are gone.",
         });
@@ -64,8 +58,12 @@ export function DeleteRunButton({
         } else {
           router.refresh();
         }
-      } catch {
-        toast.error("Network error — could not delete run.");
+      } catch (err) {
+        if (err instanceof TRPCClientError) {
+          toast.error(err.message || "Could not delete run.");
+        } else {
+          toast.error("Network error — could not delete run.");
+        }
       }
     });
   }
