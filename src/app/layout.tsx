@@ -52,12 +52,13 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      // 'dark' is hardcoded here so the SSR'd HTML carries the dark
-      // theme on first paint — next-themes hydrates afterward and only
-      // swaps classes when the user explicitly toggles. Eliminates the
-      // white-flash FOUC that's especially visible on error pages
-      // (Next.js's default 404, error.tsx fallbacks) which paint
-      // before next-themes' inline script runs.
+      // 'dark' is the SSR-time fallback. next-themes' inline script
+      // runs synchronously in <head> before first paint and swaps the
+      // class to whatever the visitor's stored preference resolves to
+      // (or, when unset, their system preference — see ThemeProvider's
+      // defaultTheme="system" below). Keeping a baked-in class also
+      // keeps JS-disabled visitors and unstyled error pages dark
+      // instead of flashing white.
       className={`dark ${GeistSans.variable} ${GeistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
@@ -77,7 +78,7 @@ export default function RootLayout({
         </a>
         <ThemeProvider
           attribute="class"
-          defaultTheme="dark"
+          defaultTheme="system"
           enableSystem
           disableTransitionOnChange
         >
