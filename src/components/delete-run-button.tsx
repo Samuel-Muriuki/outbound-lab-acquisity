@@ -22,6 +22,12 @@ export interface DeleteRunButtonProps {
 /**
  * Issues DELETE /api/research/[id], showing a confirm prompt first.
  *
+ * Confirmation is a sonner toast with Delete/Cancel action buttons —
+ * keeps the experience inside the app's brand voice (dark Geist surface
+ * + brand-secondary actions) instead of falling back to the OS-themed
+ * `window.confirm` dialog. The toast auto-dismisses on either click;
+ * clicking outside the toast cancels by inaction.
+ *
  * The endpoint validates the visitor's `outboundlab_sid` cookie against
  * the row's `creator_session_id`. The button itself only renders when
  * the server has already confirmed `isOwner` — the API call is the
@@ -37,19 +43,7 @@ export function DeleteRunButton({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  function handleClick(event: React.MouseEvent) {
-    // Recent-runs cards wrap the button inside an anchor — stop the
-    // navigation so clicking delete doesn't also open the run.
-    event.preventDefault();
-    event.stopPropagation();
-
-    if (
-      typeof window !== "undefined" &&
-      !window.confirm("Delete this run? This can't be undone.")
-    ) {
-      return;
-    }
-
+  function performDelete() {
     startTransition(async () => {
       try {
         const response = await fetch(`/api/research/${runId}`, {
@@ -62,7 +56,9 @@ export function DeleteRunButton({
           toast.error(body.error ?? "Could not delete run.");
           return;
         }
-        toast.success("Run deleted.");
+        toast.success("Run deleted", {
+          description: "The research run and its agent messages are gone.",
+        });
         if (onDeleted === "home") {
           router.push("/");
         } else {
@@ -71,6 +67,42 @@ export function DeleteRunButton({
       } catch {
         toast.error("Network error — could not delete run.");
       }
+    });
+  }
+
+  function handleClick(event: React.MouseEvent) {
+    // Recent-runs cards wrap the button inside an anchor — stop the
+    // navigation so clicking delete doesn't also open the run.
+    event.preventDefault();
+    event.stopPropagation();
+
+    toast("Delete this run?", {
+      description: "This can't be undone.",
+      duration: 10_000,
+      action: {
+        label: "Delete",
+        onClick: performDelete,
+      },
+      // Inline styles for the action/cancel buttons — sonner doesn't
+      // expose a built-in destructive variant, so we paint them
+      // explicitly: Delete in brand error red, Cancel in brand
+      // success green so each option's intent is obvious at a glance.
+      actionButtonStyle: {
+        background: "var(--error)",
+        color: "var(--background)",
+      },
+      cancelButtonStyle: {
+        background: "var(--success)",
+        color: "var(--background)",
+      },
+      cancel: {
+        label: "Cancel",
+        onClick: () => {
+          // No-op — sonner auto-dismisses the toast when either
+          // action is clicked. We pass an explicit handler so the
+          // cancel button renders.
+        },
+      },
     });
   }
 

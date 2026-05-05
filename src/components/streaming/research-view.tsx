@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { ArrowLeft, AlertCircle, X, Zap } from "lucide-react";
+import { ArrowLeft, AlertCircle, Zap } from "lucide-react";
 import {
   useResearchStream,
   type UseResearchStreamArgs,
@@ -97,23 +97,12 @@ export function ResearchView({
       <header className="flex items-center justify-between gap-4">
         <Link
           href="/"
-          className={
-            isInFlight
-              ? "inline-flex items-center gap-1.5 text-sm font-medium text-error transition-colors hover:text-error/80"
-              : "inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-          }
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          aria-label={isInFlight ? "Back to home — the research keeps running in the background" : "Back to home"}
+          title={isInFlight ? "Research keeps running in the background. You'll see it on the home page until it finishes." : undefined}
         >
-          {isInFlight ? (
-            <>
-              <X className="size-4" aria-hidden />
-              Cancel
-            </>
-          ) : (
-            <>
-              <ArrowLeft className="size-4" aria-hidden />
-              Back
-            </>
-          )}
+          <ArrowLeft className="size-4" aria-hidden />
+          Back to home
         </Link>
         {canDelete && (
           <DeleteRunButton runId={runId} onDeleted="home" variant="with-label" />

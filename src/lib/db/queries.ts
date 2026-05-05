@@ -320,6 +320,85 @@ export async function deleteRun(
   return "deleted";
 }
 
+export interface AgentMessageRow {
+  agent_index: 1 | 2 | 3;
+  agent_name: string;
+  content: unknown;
+  duration_ms: number | null;
+  created_at: string;
+}
+
+/**
+ * Per-agent assistant messages for a run, ordered by creation. Used by
+ * the SSE re-attach path: when a visitor revisits a still-running run,
+ * the new connection replays completed agents' agent_start + agent_done
+ * events from this table before polling for further progress.
+ *
+ * Returns an empty array on any DB / config error — best-effort, the
+ * replay is a UX nicety, never the source of truth.
+ */
+export async function getAgentDoneMessages(
+  runId: string
+): Promise<AgentMessageRow[]> {
+  let supabase;
+  try {
+    supabase = getSupabaseAdmin();
+  } catch {
+    return [];
+  }
+  const { data, error } = await supabase
+    .from("research_messages")
+    .select("agent_index, agent_name, content, duration_ms, created_at")
+    .eq("run_id", runId)
+    .eq("role", "assistant")
+    .order("created_at", { ascending: true });
+  if (error || !data) {
+    if (error) {
+      console.warn("[getAgentDoneMessages] Supabase error:", error.message);
+    }
+    return [];
+  }
+  return data.map((row): AgentMessageRow => ({
+    agent_index: row.agent_index as 1 | 2 | 3,
+    agent_name: row.agent_name as string,
+    content: row.content,
+    duration_ms: (row.duration_ms as number | null) ?? null,
+    created_at: row.created_at as string,
+  }));
+}
+
+export interface RunStatusRow {
+  status: "pending" | "running" | "done" | "error" | "degraded";
+  result: unknown;
+  error_message: string | null;
+}
+
+/**
+ * Lightweight status poll — used by the SSE re-attach path between
+ * replay frames to detect when the orchestrator finishes (status flips
+ * out of 'running'). Returns null on missing row or DB error.
+ */
+export async function getRunStatus(
+  runId: string
+): Promise<RunStatusRow | null> {
+  let supabase;
+  try {
+    supabase = getSupabaseAdmin();
+  } catch {
+    return null;
+  }
+  const { data, error } = await supabase
+    .from("research_runs")
+    .select("status, result, error_message")
+    .eq("id", runId)
+    .maybeSingle<RunStatusRow>();
+  if (error) {
+    console.warn("[getRunStatus] Supabase error:", error.message);
+    return null;
+  }
+  return data ?? null;
+}
+
 /** Move a pending row into running status when the orchestrator starts work. */
 export async function markRunRunning(runId: string): Promise<void> {
   const supabase = getSupabaseAdmin();
