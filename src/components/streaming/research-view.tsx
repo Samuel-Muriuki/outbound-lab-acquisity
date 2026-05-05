@@ -14,6 +14,10 @@ import { AgentTimeline } from "./agent-timeline";
 import { ResultCard } from "./result-card";
 import { RelatedRuns } from "./related-runs";
 import type { SimilarRunRow } from "@/lib/db/queries";
+import {
+  formatAbsoluteDateTime,
+  formatRunDateTime,
+} from "@/lib/utils/format-date";
 
 export interface ResearchViewProps {
   runId: string;
@@ -27,6 +31,10 @@ export interface ResearchViewProps {
   isOwner?: boolean;
   /** Top-N vector-similar past runs — fetched server-side in /research/[id]/page.tsx. */
   similarRuns?: SimilarRunRow[];
+  /** ISO timestamp when the run was created (research_runs.started_at). */
+  runStartedAt?: string | null;
+  /** ISO timestamp when the run finished — null while pending/running. */
+  runCompletedAt?: string | null;
 }
 
 /**
@@ -48,6 +56,8 @@ export function ResearchView({
   cacheSourceCompletedAt = null,
   isOwner = false,
   similarRuns = [],
+  runStartedAt = null,
+  runCompletedAt = null,
 }: ResearchViewProps) {
   const stream = useResearchStream({
     runId,
@@ -126,13 +136,27 @@ export function ResearchView({
           <span className="sr-only">Researching </span>
           {targetDomain}
         </h1>
-        {provider && (
+        {(provider || runCompletedAt || runStartedAt) && (
           <p className="mt-3 font-mono text-sm text-muted-foreground">
-            via {provider}
-            {totalDuration > 0 && (
+            {provider && <span>via {provider}</span>}
+            {provider && totalDuration > 0 && (
               <span className="ml-2 tabular-nums">
                 · {(totalDuration / 1000).toFixed(1)}s
               </span>
+            )}
+            {(runCompletedAt ?? runStartedAt) && (
+              <>
+                {provider ? <span className="mx-2">·</span> : null}
+                <time
+                  dateTime={runCompletedAt ?? runStartedAt ?? undefined}
+                  title={formatAbsoluteDateTime(
+                    runCompletedAt ?? runStartedAt
+                  )}
+                  className="tabular-nums"
+                >
+                  {formatRunDateTime(runCompletedAt ?? runStartedAt)}
+                </time>
+              </>
             )}
           </p>
         )}

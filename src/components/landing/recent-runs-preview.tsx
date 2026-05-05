@@ -4,6 +4,10 @@ import { getSessionId } from "@/lib/session/cookie";
 import { DeleteRunButton } from "@/components/delete-run-button";
 import { TiltedWrapper } from "@/components/tilted-wrapper";
 import { HoverElectricBorder } from "@/components/hover-electric-border";
+import {
+  formatAbsoluteDateTime,
+  formatRunDateTime,
+} from "@/lib/utils/format-date";
 
 /**
  * Recent runs preview on the landing page.
@@ -68,18 +72,27 @@ export async function RecentRunsPreview() {
                       </p>
                     )}
                     <hr className="my-3 border-border/60" />
-                    <p className="mt-auto font-mono text-xs tabular-nums text-subtle-foreground">
-                      {run.decision_maker_count > 0 && (
-                        <>
-                          {run.decision_maker_count}{" "}
-                          {run.decision_maker_count === 1 ? "maker" : "makers"}
-                        </>
-                      )}
-                      {run.decision_maker_count > 0 && run.duration_ms !== null && " · "}
-                      {run.duration_ms !== null && (
-                        <>{(run.duration_ms / 1000).toFixed(1)}s</>
-                      )}
-                    </p>
+                    <div className="mt-auto flex items-baseline justify-between gap-2 font-mono text-xs tabular-nums text-subtle-foreground">
+                      <span>
+                        {run.decision_maker_count > 0 && (
+                          <>
+                            {run.decision_maker_count}{" "}
+                            {run.decision_maker_count === 1 ? "maker" : "makers"}
+                          </>
+                        )}
+                        {run.decision_maker_count > 0 && run.duration_ms !== null && " · "}
+                        {run.duration_ms !== null && (
+                          <>{(run.duration_ms / 1000).toFixed(1)}s</>
+                        )}
+                      </span>
+                      <time
+                        dateTime={run.completed_at}
+                        title={formatAbsoluteDateTime(run.completed_at)}
+                        className="truncate"
+                      >
+                        {formatRunDateTime(run.completed_at)}
+                      </time>
+                    </div>
                   </Link>
                 </TiltedWrapper>
                 {/* DeleteRunButton lives INSIDE HoverElectricBorder so
