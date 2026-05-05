@@ -8,7 +8,7 @@ import {
   type UseResearchStreamArgs,
 } from "@/hooks/use-research-stream";
 import { DeleteRunButton } from "@/components/delete-run-button";
-import { InteractiveBackground } from "@/components/interactive-background";
+import { DotFieldBackground } from "@/components/backgrounds/dot-field-background";
 import { AgentTimeline } from "./agent-timeline";
 import { ResultCard } from "./result-card";
 
@@ -88,7 +88,7 @@ export function ResearchView({
 
   return (
     <>
-      <InteractiveBackground variant="aurora" />
+      <DotFieldBackground />
       <main
         id="main"
         className="relative z-10 mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-12 sm:px-6 lg:px-8"

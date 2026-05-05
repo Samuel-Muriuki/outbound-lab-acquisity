@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { searchRuns } from "@/lib/db/queries";
 import { getSessionId } from "@/lib/session/cookie";
 import { DeleteRunButton } from "@/components/delete-run-button";
+import { DotFieldBackground } from "@/components/backgrounds/dot-field-background";
 import { RunsSearch } from "@/components/runs/runs-search";
 
 export const dynamic = "force-dynamic";
@@ -33,11 +34,13 @@ export default async function RunsPage({ searchParams }: RunsPageProps) {
   const hasResults = runs.length > 0;
 
   return (
-    <main
-      id="main"
-      tabIndex={-1}
-      className="relative z-10 mx-auto flex w-full max-w-4xl flex-1 flex-col px-4 py-12 sm:px-6 md:py-16 lg:px-8 focus:outline-none"
-    >
+    <>
+      <DotFieldBackground />
+      <main
+        id="main"
+        tabIndex={-1}
+        className="relative z-10 mx-auto flex w-full max-w-4xl flex-1 flex-col px-4 py-12 sm:px-6 md:py-16 lg:px-8 focus:outline-none"
+      >
       <header>
         <Link
           href="/"
@@ -120,7 +123,8 @@ export default async function RunsPage({ searchParams }: RunsPageProps) {
       {totalPages > 1 && (
         <Pagination current={page} totalPages={totalPages} query={query} />
       )}
-    </main>
+      </main>
+    </>
   );
 }
 
