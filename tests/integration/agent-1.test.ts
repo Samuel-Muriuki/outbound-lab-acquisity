@@ -10,7 +10,9 @@
  *    OPENROUTER_API_KEY all missing — fall-through chain has nothing to
  *    fall through to)
  *  - TAVILY_API_KEY is missing
- *  - process.env.CI is set (don't burn quota on every CI run)
+ *  - process.env.CI is set AND process.env.RUN_INTEGRATION_TESTS is NOT
+ *    (default-skip on CI; the dedicated `.github/workflows/integration.yml`
+ *    schedule sets RUN_INTEGRATION_TESTS=1 to opt in)
  *  - process.env.SKIP_INTEGRATION_TESTS is set (manual escape hatch)
  *
  * Run locally: `pnpm test tests/integration/agent-1.test.ts`
@@ -27,11 +29,14 @@ const TARGET_URL = "https://acquisity.ai";
 const TIMEOUT_MS = 90_000;
 
 function shouldSkip(): { skip: boolean; reason: string } {
-  if (process.env.CI) {
-    return { skip: true, reason: "CI environment — don't burn API quota" };
-  }
   if (process.env.SKIP_INTEGRATION_TESTS) {
     return { skip: true, reason: "SKIP_INTEGRATION_TESTS is set" };
+  }
+  if (process.env.CI && !process.env.RUN_INTEGRATION_TESTS) {
+    return {
+      skip: true,
+      reason: "CI environment without RUN_INTEGRATION_TESTS — default-skip",
+    };
   }
   const hasLLM =
     Boolean(process.env.GROQ_API_KEY) ||
