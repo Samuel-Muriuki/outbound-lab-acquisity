@@ -176,6 +176,6 @@ MIT
 
 ---
 
-Built for the [Acquisity](https://acquisity.ai) Senior Full-Stack Engineer (Next.js / AI) application — May 2026.
+Built for the [Acquisity](https://www.acquisity.ai/) Senior Full-Stack Engineer (Next.js / AI) application — May 2026.
 
 <a href="https://www.buymeacoffee.com/elsamm"><img src="https://img.shields.io/badge/Buy_Me_a_Coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy Me a Coffee" /></a>
