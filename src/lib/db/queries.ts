@@ -520,6 +520,60 @@ export async function recordMessage(args: RecordMessageArgs): Promise<void> {
   }
 }
 
+export interface SimilarRunRow {
+  id: string;
+  target_domain: string;
+  target_url: string;
+  completed_at: string | null;
+  company_name: string | null;
+  one_liner: string | null;
+  /** Cosine distance, 0 (identical) to 2 (opposite). Lower = more similar. */
+  distance: number;
+}
+
+/**
+ * Top-N completed runs whose recon-brief embedding is closest to the
+ * given run's embedding, excluding the run's own domain. Returns an
+ * empty array on any error so callers can fail open (the related-runs
+ * panel just doesn't render).
+ *
+ * Backed by the `find_similar_runs` SQL function — see migration
+ * `20260505030000_find_similar_runs_function.sql`. The function uses
+ * pgvector's `<=>` cosine-distance operator against the HNSW index.
+ */
+export async function findSimilarRuns(
+  runId: string,
+  limit = 3
+): Promise<SimilarRunRow[]> {
+  let supabase;
+  try {
+    supabase = getSupabaseAdmin();
+  } catch {
+    return [];
+  }
+  const { data, error } = await supabase.rpc("find_similar_runs", {
+    p_run_id: runId,
+    p_limit: limit,
+  });
+  if (error || !data) {
+    if (error) {
+      console.warn("[findSimilarRuns] rpc error:", error.message);
+    }
+    return [];
+  }
+  return (data as Array<Record<string, unknown>>).map(
+    (row): SimilarRunRow => ({
+      id: row.id as string,
+      target_domain: row.target_domain as string,
+      target_url: row.target_url as string,
+      completed_at: (row.completed_at as string | null) ?? null,
+      company_name: (row.company_name as string | null) ?? null,
+      one_liner: (row.one_liner as string | null) ?? null,
+      distance: row.distance as number,
+    })
+  );
+}
+
 export interface InsertEmbeddingArgs {
   runId: string;
   targetDomain: string;

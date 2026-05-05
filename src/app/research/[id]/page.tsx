@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { getSessionId } from "@/lib/session/cookie";
+import { findSimilarRuns, type SimilarRunRow } from "@/lib/db/queries";
 import { ResearchView } from "@/components/streaming/research-view";
 import type { ResearchResult } from "@/lib/agents/orchestrator";
 
@@ -88,6 +89,15 @@ export default async function ResearchPage({
     data.creator_session_id !== null &&
     visitorSessionId === data.creator_session_id;
 
+  // "Related research" panel — only meaningful when this run has a
+  // result + an embedding written. findSimilarRuns returns [] for any
+  // miss (no embedding row yet, RPC error, single-run DB) so the
+  // panel just won't render in those cases.
+  const similarRuns: SimilarRunRow[] =
+    data.status === "done" || data.status === "degraded"
+      ? await findSimilarRuns(data.id, 3)
+      : [];
+
   return (
     <ResearchView
       runId={data.id}
@@ -99,6 +109,7 @@ export default async function ResearchPage({
         data.cache_hit && data.cache_source_id ? data.completed_at : null
       }
       isOwner={isOwner}
+      similarRuns={similarRuns}
     />
   );
 }
