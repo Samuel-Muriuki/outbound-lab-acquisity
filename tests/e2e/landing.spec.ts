@@ -4,7 +4,7 @@
  * Verifies the landing page loads end-to-end with every element the
  * brand spec calls out. Doesn't exercise the research flow (that
  * requires API keys + a live Supabase connection — covered by the
- * `acquisity.com` integration test in tests/integration/agent-1.test.ts).
+ * `acquisity.ai` integration test in tests/integration/agent-1.test.ts).
  *
  * Tagged @phase1 so CI can run a subset:
  *   pnpm test:e2e -- --grep "@phase1"
@@ -39,7 +39,7 @@ test.describe("OutboundLab landing — Phase 1 smoke @phase1", () => {
 
     // URL input + Research button
     await expect(
-      page.getByPlaceholder("https://acquisity.com")
+      page.getByPlaceholder("https://acquisity.ai")
     ).toBeVisible();
     await expect(page.getByRole("button", { name: /research/i })).toBeVisible();
 
@@ -51,7 +51,7 @@ test.describe("OutboundLab landing — Phase 1 smoke @phase1", () => {
 
   test("inline error appears on invalid URL submit", async ({ page }) => {
     await page.goto("/");
-    const input = page.getByPlaceholder("https://acquisity.com");
+    const input = page.getByPlaceholder("https://acquisity.ai");
     // 127.0.0.1 reliably trips the private-hostname refine (the
     // browser URL parser would otherwise auto-recover from many other
     // malformed inputs, e.g. it strips spaces and re-parses, hiding
@@ -69,7 +69,7 @@ test.describe("OutboundLab landing — Phase 1 smoke @phase1", () => {
     // Move focus off the input to start with
     await page.locator("body").click();
     await page.keyboard.press("/");
-    await expect(page.getByPlaceholder("https://acquisity.com")).toBeFocused();
+    await expect(page.getByPlaceholder("https://acquisity.ai")).toBeFocused();
   });
 
   test("non-existent run id renders the branded 404 page", async ({ page }) => {

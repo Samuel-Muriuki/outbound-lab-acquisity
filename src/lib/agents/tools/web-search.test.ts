@@ -44,12 +44,12 @@ describe("webSearchTool.execute()", () => {
         results: [
           {
             title: "Acquisity — AI Growth System",
-            url: "https://acquisity.com",
+            url: "https://acquisity.ai",
             content: "AI-powered growth system for B2B clients.",
           },
           {
             title: "Acquisity team page",
-            url: "https://acquisity.com/team",
+            url: "https://acquisity.ai/team",
             content: "Meet the founders.",
           },
         ],
@@ -73,7 +73,7 @@ describe("webSearchTool.execute()", () => {
     });
 
     expect(out).toContain("1. Acquisity — AI Growth System");
-    expect(out).toContain("https://acquisity.com");
+    expect(out).toContain("https://acquisity.ai");
     expect(out).toContain("AI-powered growth system");
     expect(out).toContain("2. Acquisity team page");
   });

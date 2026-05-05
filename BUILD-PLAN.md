@@ -105,7 +105,7 @@ PR 5: ✨ feat(landing): hero section with URL input
 
 PR 6: ✨ feat(landing): "Run on Acquisity" preset button
 - Below the input, a secondary action: "Try it on Acquisity"
-- Pre-fills the input with https://acquisity.com when clicked
+- Pre-fills the input with https://acquisity.ai when clicked
 - Smaller button, ghost variant
 
 PR 7: ✨ feat(api): research route handler with input validation
@@ -118,7 +118,7 @@ PR 8: ✨ feat(landing): wire input to navigate to /research/[id]
 - On submit, POST to /api/research, then router.push(/research/${run_id})
 - Show loading state during the POST
 
-After PR 8: visit production URL → submit acquisity.com → land on /research/[id] page (which is empty for now). Test on real phone, not just laptop. Update PROJECT_STATUS to "Phase 1: 40%". Write session notes.
+After PR 8: visit production URL → submit acquisity.ai → land on /research/[id] page (which is empty for now). Test on real phone, not just laptop. Update PROJECT_STATUS to "Phase 1: 40%". Write session notes.
 ```
 
 ---
@@ -152,12 +152,12 @@ PR 11: ✨ feat(agents): Reconnaissance agent with tool-use loop
 - Use exact code from section 4.5
 - Unit test: mock the chat() provider layer, verify Zod validation works on agent output
 
-PR 12: 🧪 test(agents): integration test for Agent 1 against acquisity.com
+PR 12: 🧪 test(agents): integration test for Agent 1 against acquisity.ai
 - /tests/integration/agent-1.test.ts
 - Calls real Groq API (skipped on CI)
-- Asserts Zod-valid output for acquisity.com input
+- Asserts Zod-valid output for acquisity.ai input
 
-After PR 12: run the integration test locally. The agent must return a valid ReconnaissanceOutput for acquisity.com. If it doesn't, iterate the prompt before proceeding. PR 12 SHIPS only after the agent works. Update PROJECT_STATUS to "Phase 1: 60%".
+After PR 12: run the integration test locally. The agent must return a valid ReconnaissanceOutput for acquisity.ai. If it doesn't, iterate the prompt before proceeding. PR 12 SHIPS only after the agent works. Update PROJECT_STATUS to "Phase 1: 60%".
 ```
 
 ---
@@ -195,7 +195,7 @@ PR 16: ✨ feat(api): SSE streaming on /api/research/[id]/stream
 - Streams orchestrator events as SSE
 - On completion, persists final result to research_runs.result
 
-After PR 16: visit production URL, submit acquisity.com, watch the network tab — you should see SSE events streaming. Frontend doesn't render them yet, that's session 5. Update PROJECT_STATUS to "Phase 1: 80%".
+After PR 16: visit production URL, submit acquisity.ai, watch the network tab — you should see SSE events streaming. Frontend doesn't render them yet, that's session 5. Update PROJECT_STATUS to "Phase 1: 80%".
 ```
 
 ---
@@ -234,7 +234,7 @@ PR 20: ♿️ a11y: keyboard navigation and ARIA roles on streaming view
 - Live regions for stream updates
 - Reduced-motion support
 
-After PR 20: production end-to-end test. Submit acquisity.com, watch the agents stream, verify the result card renders correctly. SCREENSHOT THE RESULT — you'll need it for the resume. PROJECT_STATUS = "Phase 1: 100%".
+After PR 20: production end-to-end test. Submit acquisity.ai, watch the agents stream, verify the result card renders correctly. SCREENSHOT THE RESULT — you'll need it for the resume. PROJECT_STATUS = "Phase 1: 100%".
 ```
 
 ---
