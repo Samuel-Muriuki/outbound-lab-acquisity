@@ -1,11 +1,14 @@
 "use client";
 
-import { useState, type ComponentType, type SVGProps } from "react";
-import { ArrowUpRight, Copy, Mail, RefreshCw } from "lucide-react";
+import { useMemo, useState, type ComponentType, type SVGProps } from "react";
+import { ArrowUpRight, Copy, Loader2, Mail, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { TRPCClientError } from "@trpc/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { trpc } from "@/lib/trpc/client";
 import type { ResearchResult } from "@/lib/agents/orchestrator";
+import type { EmailOutputT } from "@/lib/agents/schemas";
 import { cn } from "@/lib/utils";
 
 /**
@@ -45,6 +48,12 @@ const CHANNEL_ICON: Record<"email" | "linkedin" | "x", IconComponent> = {
 
 interface ResultCardProps {
   result: ResearchResult;
+  /**
+   * The run id — passed through to the EmailPanel so it can call the
+   * `research.regenerateEmail` mutation when the visitor picks a
+   * different decision maker as the email target.
+   */
+  runId?: string;
 }
 
 /**
@@ -71,7 +80,7 @@ function isUnknownSize(value: string): boolean {
  * needs a separate POST endpoint that re-runs Agent 3 only with
  * tone='warm', and that's not in Phase 1 scope.
  */
-export function ResultCard({ result }: ResultCardProps) {
+export function ResultCard({ result, runId }: ResultCardProps) {
   const { recon, people, degraded, forbiddenReason, email } = result;
   const channel = email.channel ?? "email";
   const channelLabel = CHANNEL_LABEL[channel];
@@ -131,7 +140,7 @@ export function ResultCard({ result }: ResultCardProps) {
           <PeoplePanel result={result} />
         </TabsContent>
         <TabsContent value="email">
-          <EmailPanel result={result} />
+          <EmailPanel result={result} runId={runId} />
         </TabsContent>
         <TabsContent value="sources">
           <SourcesPanel result={result} />
@@ -229,10 +238,28 @@ function PeoplePanel({ result }: ResultCardProps) {
   );
 }
 
-function EmailPanel({ result }: ResultCardProps) {
-  const { email } = result;
+function EmailPanel({ result, runId }: ResultCardProps) {
+  const { email: persistedEmail, people } = result;
+  // Local state: the email shown in the panel. Starts as the persisted
+  // one; gets swapped when the visitor regenerates for a different
+  // target. Never written back to the DB — exploration is local.
+  const [email, setEmail] = useState<EmailOutputT>(persistedEmail);
   const channel = email.channel ?? "email";
   const [isCopying, setIsCopying] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+
+  // Find which decision maker the current email targets so the picker
+  // pre-selects the right radio. Match by name (Agent 3 may have
+  // truncated "John Smith" to "John" — fall back to the first DM).
+  const activeIndex = useMemo(() => {
+    const idx = people.decision_makers.findIndex(
+      (dm) => dm.name === email.to.name
+    );
+    if (idx >= 0) return idx;
+    return people.decision_makers.findIndex((dm) =>
+      dm.name.toLowerCase().includes(email.to.name.toLowerCase().split(" ")[0])
+    );
+  }, [email.to.name, people.decision_makers]);
 
   async function handleCopy() {
     if (isCopying) return;
@@ -253,8 +280,79 @@ function EmailPanel({ result }: ResultCardProps) {
     }
   }
 
+  async function handleRegenerate(targetIndex: number) {
+    if (!runId) return;
+    if (isRegenerating) return;
+    if (targetIndex === activeIndex) return;
+    setIsRegenerating(true);
+    try {
+      const res = await trpc.research.regenerateEmail.mutate({
+        id: runId,
+        targetIndex,
+      });
+      setEmail(res.email);
+      toast.success(
+        `Rewritten for ${res.email.to.name}.`,
+        res.degraded
+          ? {
+              description:
+                res.forbiddenReason ??
+                "Draft was retried — review carefully before sending.",
+            }
+          : undefined
+      );
+    } catch (err) {
+      if (err instanceof TRPCClientError) {
+        toast.error(err.message || "Could not regenerate. Try again.");
+      } else {
+        toast.error("Network error — could not regenerate.");
+      }
+    } finally {
+      setIsRegenerating(false);
+    }
+  }
+
+  const canRegenerate =
+    runId !== undefined && people.decision_makers.length > 1;
+
   return (
     <div className="mt-4 rounded-xl border border-border bg-background p-5">
+      {canRegenerate && (
+        <div
+          role="radiogroup"
+          aria-label="Write this message to"
+          className="mb-4 -mt-1 flex flex-wrap items-center gap-2 text-xs"
+        >
+          <span className="text-subtle-foreground">Write to:</span>
+          {people.decision_makers.map((dm, i) => {
+            const selected = i === activeIndex;
+            return (
+              <button
+                key={`${dm.name}-${i}`}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                onClick={() => handleRegenerate(i)}
+                disabled={isRegenerating}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-medium transition-colors duration-200 [transition-timing-function:var(--ease-out)]",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40",
+                  selected
+                    ? "border-brand-secondary/60 bg-brand-secondary/10 text-foreground"
+                    : "border-border bg-surface-1 text-muted-foreground hover:border-brand-secondary/40 hover:text-foreground",
+                  isRegenerating && "cursor-wait opacity-60"
+                )}
+              >
+                {selected && isRegenerating ? (
+                  <Loader2 className="size-3 animate-spin" aria-hidden />
+                ) : null}
+                <span className="truncate max-w-[18ch]">{dm.name}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <dl className="space-y-3 text-sm">
         <FieldRow label="To">
           <span className="font-medium text-foreground">{email.to.name}</span>

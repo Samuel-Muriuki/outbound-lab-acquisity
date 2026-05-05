@@ -23,6 +23,15 @@ const MAX_TOKENS = 1_024;
 export interface RunAgent3Options {
   tone?: "cold" | "warm";
   channel?: OutreachChannelT;
+  /**
+   * Index into `people.decision_makers` of the person Agent 3 should
+   * write to. When omitted (or 0), Agent 3 picks the first decision
+   * maker as before. When set, that decision maker is reordered to
+   * index 0 of the array passed to Agent 3 — the prompt always tells
+   * the model to write for the FIRST decision maker, so reordering
+   * effects the change without prompt-level branching.
+   */
+  targetIndex?: number;
 }
 
 export interface Agent3Result {
@@ -77,14 +86,34 @@ export async function runAgent3(
 ): Promise<Agent3Result> {
   const tone = options.tone ?? "cold";
   const channel = options.channel ?? "email";
+
+  // Pull the picked decision maker to the front so Agent 3's prompt
+  // ("write to the FIRST decision maker") targets them. Skip when no
+  // targetIndex, or when out of bounds, or when it's already 0.
+  const peopleForAgent: PeopleOutputT = (() => {
+    const idx = options.targetIndex ?? 0;
+    if (
+      idx <= 0 ||
+      idx >= people.decision_makers.length
+    ) {
+      return people;
+    }
+    const picked = people.decision_makers[idx];
+    const rest = people.decision_makers.filter((_, i) => i !== idx);
+    return {
+      ...people,
+      decision_makers: [picked, ...rest],
+    };
+  })();
+
   let firstForbiddenReason: string | null = null;
   let lastZodError: Error | null = null;
 
   for (let attempt = 0; attempt < MAX_RETRIES + 1; attempt++) {
     const userPrompt =
       attempt === 0
-        ? emailUserPrompt(brief, people, tone, channel)
-        : buildRetryPrompt(brief, people, tone, channel, firstForbiddenReason, lastZodError);
+        ? emailUserPrompt(brief, peopleForAgent, tone, channel)
+        : buildRetryPrompt(brief, peopleForAgent, tone, channel, firstForbiddenReason, lastZodError);
 
     const result = await chat(
       {
