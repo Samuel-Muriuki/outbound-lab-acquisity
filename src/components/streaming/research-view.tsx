@@ -12,6 +12,8 @@ import { DotFieldBackground } from "@/components/backgrounds/dot-field-backgroun
 import { TiltedWrapper } from "@/components/tilted-wrapper";
 import { AgentTimeline } from "./agent-timeline";
 import { ResultCard } from "./result-card";
+import { RelatedRuns } from "./related-runs";
+import type { SimilarRunRow } from "@/lib/db/queries";
 
 export interface ResearchViewProps {
   runId: string;
@@ -23,6 +25,8 @@ export interface ResearchViewProps {
   cacheSourceCompletedAt?: string | null;
   /** True when the visitor's session cookie matches this run's creator. */
   isOwner?: boolean;
+  /** Top-N vector-similar past runs — fetched server-side in /research/[id]/page.tsx. */
+  similarRuns?: SimilarRunRow[];
 }
 
 /**
@@ -43,6 +47,7 @@ export function ResearchView({
   initialError = null,
   cacheSourceCompletedAt = null,
   isOwner = false,
+  similarRuns = [],
 }: ResearchViewProps) {
   const stream = useResearchStream({
     runId,
@@ -180,6 +185,10 @@ export function ResearchView({
 
       {stream.status === "done" && stream.result && (
         <ResultSection result={stream.result} />
+      )}
+
+      {stream.status === "done" && stream.result && similarRuns.length > 0 && (
+        <RelatedRuns runs={similarRuns} />
       )}
       </main>
     </>
