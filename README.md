@@ -1,6 +1,6 @@
 # OutboundLab
 
-<a href="https://github.com/Samuel-Muriuki/outbound-lab-acquisity/actions/workflows/ci.yml"><img src="https://github.com/Samuel-Muriuki/outbound-lab-acquisity/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI status" /></a>
+<a href="https://github.com/Samuel-Muriuki/OutBound-Lab-Acquisity/actions/workflows/ci.yml"><img src="https://github.com/Samuel-Muriuki/OutBound-Lab-Acquisity/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI status" /></a>
 <a href="https://www.buymeacoffee.com/elsamm"><img src="https://img.shields.io/badge/Buy_Me_a_Coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy Me a Coffee" /></a>
 
 > Multi-agent B2B research, on demand. Paste any company URL — get a personalised outreach package in under a minute.
@@ -95,8 +95,8 @@ The audience uses agent products (Cursor, Linear, Vercel) that default dark. Lig
 ## Run locally
 
 ```bash
-git clone git@github.com:Samuel-Muriuki/outbound-lab-acquisity.git
-cd outbound-lab-acquisity
+git clone git@github.com:Samuel-Muriuki/OutBound-Lab-Acquisity.git
+cd OutBound-Lab-Acquisity
 bash bootstrap.sh
 
 # Fill in real keys
