@@ -17,9 +17,13 @@ test.describe("OutboundLab landing — Phase 1 smoke @phase1", () => {
   }) => {
     await page.goto("/");
 
-    // Header: gradient dot + wordmark
+    // Header: gradient dot + wordmark.
+    // Note: the <header> here is nested inside <main>, so per the ARIA
+    // spec it does NOT carry the implicit `banner` landmark role
+    // (banner only applies to <header> as a direct child of <body>).
+    // We locate by element selector + the wordmark text instead.
     await expect(
-      page.getByRole("banner").getByText("OutboundLab")
+      page.locator("header").getByText("OutboundLab")
     ).toBeVisible();
 
     // H1
@@ -48,11 +52,15 @@ test.describe("OutboundLab landing — Phase 1 smoke @phase1", () => {
   test("inline error appears on invalid URL submit", async ({ page }) => {
     await page.goto("/");
     const input = page.getByPlaceholder("https://acquisity.com");
-    await input.fill("javascript:alert(1)");
+    // 127.0.0.1 reliably trips the private-hostname refine (the
+    // browser URL parser would otherwise auto-recover from many other
+    // malformed inputs, e.g. it strips spaces and re-parses, hiding
+    // the validation error we want to assert against).
+    await input.fill("127.0.0.1");
     await page.getByRole("button", { name: /research/i }).click();
 
     await expect(
-      page.getByText(/Only http:\/\/ and https:\/\/ URLs are supported/i)
+      page.getByText(/Cannot research private or local addresses/i)
     ).toBeVisible();
   });
 
