@@ -195,11 +195,36 @@ export function ResearchView({
       )}
 
       {stream.status === "done" && stream.result && (
-        <section className="mt-10">
-          <ResultCard result={stream.result} />
-        </section>
+        <ResultSection result={stream.result} />
       )}
       </main>
     </>
+  );
+}
+
+/**
+ * Wraps the ResultCard with an effect that scrolls itself into view the
+ * first time it mounts, so visitors are taken straight to the
+ * deliverable when the run finishes (rather than having to scroll past
+ * the agent timeline manually).
+ */
+function ResultSection({ result }: { result: NonNullable<ReturnType<typeof useResearchStream>["result"]> }) {
+  const sectionRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const node = sectionRef.current;
+    if (!node) return;
+    const reduced = typeof window !== "undefined"
+      && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    node.scrollIntoView({
+      behavior: reduced ? "auto" : "smooth",
+      block: "start",
+    });
+  }, []);
+
+  return (
+    <section ref={sectionRef} className="mt-10 scroll-mt-12">
+      <ResultCard result={result} />
+    </section>
   );
 }
