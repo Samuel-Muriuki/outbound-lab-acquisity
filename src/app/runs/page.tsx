@@ -7,10 +7,7 @@ import { DotFieldBackground } from "@/components/backgrounds/dot-field-backgroun
 import { RunsSearch } from "@/components/runs/runs-search";
 import { TiltedWrapper } from "@/components/tilted-wrapper";
 import { HoverElectricBorder } from "@/components/hover-electric-border";
-import {
-  formatAbsoluteDateTime,
-  formatRunDateTime,
-} from "@/lib/utils/format-date";
+import { RunTimestamp } from "@/components/run-timestamp";
 
 export const dynamic = "force-dynamic";
 
@@ -109,13 +106,7 @@ export default async function RunsPage({ searchParams }: RunsPageProps) {
                             <>{(run.duration_ms / 1000).toFixed(1)}s</>
                           )}
                         </span>
-                        <time
-                          dateTime={run.completed_at}
-                          title={formatAbsoluteDateTime(run.completed_at)}
-                          className="truncate"
-                        >
-                          {formatRunDateTime(run.completed_at)}
-                        </time>
+                        <RunTimestamp iso={run.completed_at} className="truncate" />
                       </div>
                     </Link>
                   </TiltedWrapper>

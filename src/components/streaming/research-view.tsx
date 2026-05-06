@@ -13,11 +13,8 @@ import { TiltedWrapper } from "@/components/tilted-wrapper";
 import { AgentTimeline } from "./agent-timeline";
 import { ResultCard } from "./result-card";
 import { RelatedRuns } from "./related-runs";
+import { RunTimestamp } from "@/components/run-timestamp";
 import type { SimilarRunRow } from "@/lib/db/queries";
-import {
-  formatAbsoluteDateTime,
-  formatRunDateTime,
-} from "@/lib/utils/format-date";
 
 export interface ResearchViewProps {
   runId: string;
@@ -147,15 +144,10 @@ export function ResearchView({
             {(runCompletedAt ?? runStartedAt) && (
               <>
                 {provider ? <span className="mx-2">·</span> : null}
-                <time
-                  dateTime={runCompletedAt ?? runStartedAt ?? undefined}
-                  title={formatAbsoluteDateTime(
-                    runCompletedAt ?? runStartedAt
-                  )}
+                <RunTimestamp
+                  iso={runCompletedAt ?? runStartedAt}
                   className="tabular-nums"
-                >
-                  {formatRunDateTime(runCompletedAt ?? runStartedAt)}
-                </time>
+                />
               </>
             )}
           </p>
