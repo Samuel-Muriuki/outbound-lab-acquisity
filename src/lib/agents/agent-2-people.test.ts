@@ -102,23 +102,39 @@ afterEach(() => {
 });
 
 describe("runAgent2()", () => {
-  it("auto-accepts a DM when the source URL is on the target domain (no source fetch needed)", async () => {
+  it("auto-accepts a DM when the source URL is on the target domain (Tier 1)", async () => {
     chatMock.mockResolvedValueOnce(
-      makeChatResult({ text: JSON.stringify(VALID_OUTPUT) })
+      makeChatResult({
+        text: JSON.stringify({
+          ...VALID_OUTPUT,
+          decision_makers: [
+            {
+              name: "Tasnim A.",
+              role: "Global TA & People Experience Leader",
+              why_them: "Owns TA hiring strategy at Acquisity.",
+              // Use /press — NOT in the seed-path list — so we can
+              // assert the DM's specific URL isn't fetched
+              // independently of the seed-path probing.
+              source_url: "https://acquisity.ai/press/2026-q2-update",
+              linkedin_url: "https://linkedin.com/in/tasnim-a",
+            },
+          ],
+        }),
+      })
     );
-    // VALID_OUTPUT source_url is https://acquisity.ai/team — host
-    // matches RECON_BRIEF.sources[0] hostname → Tier 1 accept.
-    // The trusted-corpus build fetches brief.sources[0] but the DM's
-    // own source_url is never fetched.
     webFetchExecute.mockResolvedValue("Acquisity homepage content.");
 
     const { emit, events } = captureEvents();
     const out = await runAgent2(RECON_BRIEF, "run-id", emit);
     expect(out.decision_makers).toHaveLength(1);
     expect(out.decision_makers[0]!.name).toBe("Tasnim A.");
-    // The DM's own source_url is not fetched (only the brief source).
+    // Seed paths get probed for the trusted corpus, but the DM's own
+    // /press source URL isn't fetched — Tier 1 accepts on hostname
+    // match alone.
     const fetchedUrls = webFetchExecute.mock.calls.map((c) => c[0].url);
-    expect(fetchedUrls).not.toContain("https://acquisity.ai/team");
+    expect(fetchedUrls).not.toContain(
+      "https://acquisity.ai/press/2026-q2-update"
+    );
     expect(events.find((e) => e.type === "provider_used")).toBeDefined();
   });
 
@@ -158,6 +174,45 @@ describe("runAgent2()", () => {
     expect(webFetchExecute).toHaveBeenCalledWith({
       url: "https://acquisity.ai",
     });
+  });
+
+  it("trusted corpus probes seed team paths (/about, /team, …) in addition to brief sources", async () => {
+    chatMock.mockResolvedValueOnce(
+      makeChatResult({
+        text: JSON.stringify({
+          ...VALID_OUTPUT,
+          decision_makers: [
+            {
+              name: "Jared Stauffer",
+              role: "CEO",
+              why_them: "Founder of Acquisity. Cited via LinkedIn.",
+              source_url: "https://linkedin.com/in/jaredpstauffer",
+              linkedin_url: "https://linkedin.com/in/jaredpstauffer",
+            },
+          ],
+        }),
+      })
+    );
+    // Brief homepage has no founder names, but /story does. Tier 2
+    // should still accept Stauffer because the seed-path corpus
+    // contains his name.
+    webFetchExecute.mockImplementation(async ({ url }: { url: string }) => {
+      if (url === "https://acquisity.ai/story") {
+        return "Acquisity was founded in 2024 by Jared Stauffer.";
+      }
+      if (url.startsWith("https://acquisity.ai")) {
+        return "Acquisity homepage marketing copy — no team listed.";
+      }
+      return "";
+    });
+
+    const { emit } = captureEvents();
+    const out = await runAgent2(RECON_BRIEF, "run-id", emit);
+    expect(out.decision_makers).toHaveLength(1);
+    expect(out.decision_makers[0]!.name).toBe("Jared Stauffer");
+    const fetchedUrls = webFetchExecute.mock.calls.map((c) => c[0].url);
+    expect(fetchedUrls).toContain("https://acquisity.ai/story");
+    expect(fetchedUrls).toContain("https://acquisity.ai/team");
   });
 
   it("auto-accepts subdomains of the target (e.g. blog.acquisity.ai)", async () => {
@@ -206,11 +261,12 @@ describe("runAgent2()", () => {
         }),
       })
     );
-    // Trusted corpus build (brief.sources[0]) returns content WITHOUT
-    // Marcus Reed's name → Tier 2 misses → fall through to Tier 3
-    // which fetches the cross-domain source.
+    // Trusted corpus build fetches brief.sources[0] AND the seed
+    // team paths (/about, /team, …). All target-domain hits return
+    // content WITHOUT Marcus Reed's name → Tier 2 misses → fall
+    // through to Tier 3 which fetches the cross-domain source.
     webFetchExecute.mockImplementation(async ({ url }: { url: string }) => {
-      if (url === "https://acquisity.ai") {
+      if (url.startsWith("https://acquisity.ai")) {
         return "Acquisity homepage — no team mentions here.";
       }
       return "Marcus Reed leads sales at Acquisity, the AI-powered B2B growth system.";
@@ -247,8 +303,9 @@ describe("runAgent2()", () => {
       })
     );
     webFetchExecute.mockImplementation(async ({ url }: { url: string }) => {
-      if (url === "https://acquisity.ai") {
-        // Trusted corpus: Acquisity's own page does NOT mention Hormozi.
+      if (url.startsWith("https://acquisity.ai")) {
+        // Trusted corpus (brief sources + seed team paths): Acquisity's
+        // own pages do NOT mention Hormozi.
         return "Acquisity is an AI-powered B2B growth platform. Founded 2024.";
       }
       // Cross-domain source: Acquisition.com page has Hormozi but not Acquisity.
