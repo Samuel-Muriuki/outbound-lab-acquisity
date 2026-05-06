@@ -24,11 +24,17 @@ import { composeEmbeddingInput, embedText } from "./embeddings/embed";
 /**
  * Final structured result the orchestrator persists to research_runs.result
  * and ships as the SSE final_result frame.
+ *
+ * `email` is null when Agent 2's validation gate dropped every
+ * candidate decision maker — we skip Agent 3 entirely rather than
+ * letting it hallucinate a recipient out of the buyer-persona
+ * placeholder. UI surfaces a "no verifiable decision makers found"
+ * panel and points the visitor at LinkedIn People Search.
  */
 export interface ResearchResult {
   recon: ReconnaissanceOutputT;
   people: PeopleOutputT;
-  email: EmailOutputT;
+  email: EmailOutputT | null;
   degraded?: boolean;
   forbiddenReason?: string | null;
 }
@@ -142,56 +148,95 @@ export async function* runResearch(
       });
 
       // 5. Agent 3 — Personalisation & Outreach
-      stream.emit({
-        type: "agent_start",
-        agent: 3,
-        name: "Personalisation & Outreach",
-      });
-      const a3Start = Date.now();
-      const a3Result: Agent3Result = await runAgent3(
-        recon,
-        people,
-        runId,
-        stream.emit,
-        {
-          tone: options.tone ?? "cold",
-          channel: options.channel ?? "email",
-        }
-      );
-      const a3Duration = Date.now() - a3Start;
-      await recordMessage({
-        runId,
-        agentIndex: 3,
-        agentName: "Personalisation & Outreach",
-        role: "assistant",
-        content: a3Result.output,
-        durationMs: a3Duration,
-      });
-      stream.emit({
-        type: "agent_done",
-        agent: 3,
-        output: a3Result.output,
-        duration_ms: a3Duration,
-      });
+      //
+      // Short-circuit when Agent 2's validation gate dropped every
+      // candidate. Letting Agent 3 run on an empty decision_makers
+      // list invites the model to hallucinate a recipient from the
+      // buyer-persona placeholder ("Head of Growth" with malformed
+      // JSON, etc.) and burn provider quota for nothing. Mark the
+      // run degraded and surface a clear "no verifiable DMs found"
+      // state to the UI instead.
+      const NO_DMS_REASON =
+        "No verifiable decision makers found in public sources. " +
+        "Research the team via LinkedIn People Search on the " +
+        "company page.";
+
+      let a3Duration = 0;
+      let a3Result: Agent3Result | null = null;
+      if (people.decision_makers.length === 0) {
+        // Emit synthetic agent_start + agent_done so the streaming
+        // timeline doesn't hang on the third card.
+        stream.emit({
+          type: "agent_start",
+          agent: 3,
+          name: "Personalisation & Outreach",
+        });
+        stream.emit({
+          type: "agent_thinking",
+          agent: 3,
+          delta: NO_DMS_REASON,
+        });
+        stream.emit({
+          type: "agent_done",
+          agent: 3,
+          output: null,
+          duration_ms: 0,
+        });
+      } else {
+        stream.emit({
+          type: "agent_start",
+          agent: 3,
+          name: "Personalisation & Outreach",
+        });
+        const a3Start = Date.now();
+        a3Result = await runAgent3(
+          recon,
+          people,
+          runId,
+          stream.emit,
+          {
+            tone: options.tone ?? "cold",
+            channel: options.channel ?? "email",
+          }
+        );
+        a3Duration = Date.now() - a3Start;
+        await recordMessage({
+          runId,
+          agentIndex: 3,
+          agentName: "Personalisation & Outreach",
+          role: "assistant",
+          content: a3Result.output,
+          durationMs: a3Duration,
+        });
+        stream.emit({
+          type: "agent_done",
+          agent: 3,
+          output: a3Result.output,
+          duration_ms: a3Duration,
+        });
+      }
 
       // 6. Build final payload + persist
+      const noDms = a3Result === null;
       const payload: ResearchResult = {
         recon,
         people,
-        email: a3Result.output,
-        degraded: a3Result.degraded,
-        forbiddenReason: a3Result.forbiddenReason,
+        email: a3Result?.output ?? null,
+        degraded: noDms || a3Result?.degraded || false,
+        forbiddenReason: a3Result?.forbiddenReason ?? null,
       };
       const totalDuration = a1Duration + a2Duration + a3Duration;
 
-      if (a3Result.degraded) {
+      if (payload.degraded) {
         await degradeRun({
           runId,
           result: payload,
           durationMs: totalDuration,
           reason:
-            a3Result.forbiddenReason ??
-            "Agent 3 emitted forbidden phrasing twice; surface as draft.",
+            noDms
+              ? NO_DMS_REASON
+              : a3Result?.forbiddenReason ??
+                "Agent 3 emitted forbidden phrasing twice; surface as draft.",
         });
       } else {
         await completeRun({

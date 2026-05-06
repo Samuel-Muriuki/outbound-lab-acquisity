@@ -82,7 +82,11 @@ function isUnknownSize(value: string): boolean {
  */
 export function ResultCard({ result, runId }: ResultCardProps) {
   const { recon, people, degraded, forbiddenReason, email } = result;
-  const channel = email.channel ?? "email";
+  const noDms = email === null;
+  // Channel is always "email" when there's no draft to render — the
+  // outreach tab falls back to a "no decision makers" state and the
+  // mail-icon is the right neutral placeholder.
+  const channel = email?.channel ?? "email";
   const ChannelIcon = CHANNEL_ICON[channel];
 
   return (
@@ -108,7 +112,9 @@ export function ResultCard({ result, runId }: ResultCardProps) {
             className="mt-4 rounded-md border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-warning"
             role="status"
           >
-            Email was retried — review carefully before sending.
+            {noDms
+              ? "No verifiable decision makers found in public sources. The Brief tab still has a full company profile — research individual contacts on LinkedIn."
+              : "Email was retried — review carefully before sending."}
             {forbiddenReason ? ` (${forbiddenReason})` : null}
           </p>
         )}
@@ -139,7 +145,14 @@ export function ResultCard({ result, runId }: ResultCardProps) {
           <PeoplePanel result={result} />
         </TabsContent>
         <TabsContent value="email">
-          <EmailPanel result={result} runId={runId} />
+          {noDms ? (
+            <NoDecisionMakersPanel
+              companyName={recon.company_name}
+              targetDomain={recon.sources[0]}
+            />
+          ) : (
+            <EmailPanel result={result} runId={runId} />
+          )}
         </TabsContent>
         <TabsContent value="sources">
           <SourcesPanel result={result} />
@@ -239,10 +252,14 @@ function PeoplePanel({ result }: ResultCardProps) {
 
 function EmailPanel({ result, runId }: ResultCardProps) {
   const { email: persistedEmail, people } = result;
+  // ResultCard guarantees we only mount EmailPanel when persistedEmail
+  // is non-null — the no-DMs degraded state renders NoDecisionMakersPanel
+  // instead. Cast for clarity; runtime invariant holds.
+  const initialEmail = persistedEmail as EmailOutputT;
   // Local state: the email shown in the panel. Starts as the persisted
   // one; gets swapped when the visitor regenerates for a different
   // target. Never written back to the DB — exploration is local.
-  const [email, setEmail] = useState<EmailOutputT>(persistedEmail);
+  const [email, setEmail] = useState<EmailOutputT>(initialEmail);
   const channel = email.channel ?? "email";
   const [isCopying, setIsCopying] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
@@ -610,6 +627,87 @@ function buildMailtoHref(subject: string | null, body: string): string {
 interface SourceEntry {
   url: string;
   label: string;
+}
+
+/**
+ * Renders the Outreach tab when Agent 2's validation gate dropped
+ * every candidate decision maker — orchestrator skipped Agent 3 to
+ * avoid hallucinating a recipient. Points the visitor at the
+ * authoritative path (LinkedIn People Search filtered by current
+ * company) and surfaces the company-level facts that ARE known so
+ * they can hand-craft an outreach.
+ */
+function NoDecisionMakersPanel({
+  companyName,
+  targetDomain,
+}: {
+  companyName: string;
+  targetDomain: string;
+}) {
+  // LinkedIn's people search supports a `currentCompany` filter
+  // keyword — this URL pre-fills it with the target's name so the
+  // visitor lands one click from the right list. Fallback: a plain
+  // company-name keyword search if LinkedIn re-shapes the URL.
+  const linkedinSearchUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(
+    companyName
+  )}&origin=GLOBAL_SEARCH_HEADER`;
+  // Strip protocol + path off the recon's first source for a clean
+  // bare-domain string in the helper text.
+  let bareDomain = "";
+  try {
+    bareDomain = new URL(targetDomain).hostname.replace(/^www\./, "");
+  } catch {
+    bareDomain = targetDomain;
+  }
+
+  return (
+    <div className="mt-4 rounded-xl border border-border bg-background p-5">
+      <div className="flex items-start gap-3">
+        <Mail className="mt-0.5 size-4 shrink-0 text-subtle-foreground" aria-hidden />
+        <div className="space-y-3 text-sm">
+          <p className="font-medium text-foreground">
+            No verifiable decision makers found in public sources.
+          </p>
+          <p className="text-muted-foreground">
+            We couldn&apos;t corroborate any individual&apos;s name + role +
+            target-company affiliation from the homepage, /team, /about, /story,
+            LinkedIn company page, or third-party press. That&apos;s usually a
+            small team without a public team page.
+          </p>
+          <p className="text-muted-foreground">
+            Best path: search LinkedIn People filtered by current company
+            <span className="ml-1 font-mono text-foreground">
+              &quot;{companyName}&quot;
+            </span>
+            {bareDomain && (
+              <>
+                {" "}or
+                <span className="ml-1 font-mono text-foreground">
+                  &quot;{bareDomain}&quot;
+                </span>
+              </>
+            )}{" "}
+            and identify the recipient yourself. Use the Brief tab below as
+            research context for the message.
+          </p>
+        </div>
+      </div>
+
+      <hr className="my-4 border-border" />
+
+      <div className="flex flex-wrap items-center gap-2">
+        <a
+          href={linkedinSearchUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-foreground px-3 text-sm font-medium text-background transition-all duration-200 [transition-timing-function:var(--ease-out)] hover:bg-foreground/90 active:scale-[0.98]"
+        >
+          <ArrowUpRight className="size-3.5" aria-hidden />
+          Open LinkedIn People Search
+        </a>
+      </div>
+    </div>
+  );
 }
 
 function collectSources(result: ResearchResult): SourceEntry[] {

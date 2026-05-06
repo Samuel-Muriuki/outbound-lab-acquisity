@@ -184,6 +184,49 @@ describe("runResearch() — orchestrator", () => {
     expect(failRunMock).not.toHaveBeenCalled();
   });
 
+  it("skips Agent 3 entirely when Agent 2 returns zero decision makers (empty-DM resilience)", async () => {
+    // Regression guard for the live 2026-05-06 acquisity.ai bug:
+    // Agent 2 returned [] (validation gate dropped every candidate),
+    // Agent 3 then ran on an empty DM list, hallucinated a recipient
+    // from the buyer-persona placeholder, and Gemini emitted
+    // malformed JSON. The orchestrator should short-circuit instead.
+    runAgent1Mock.mockResolvedValueOnce(RECON);
+    runAgent2Mock.mockResolvedValueOnce({
+      ...PEOPLE,
+      decision_makers: [],
+    });
+
+    const events = await collect(runResearch("https://acquisity.ai", "run-id"));
+
+    // Agent 3 was NEVER invoked — that's the whole point.
+    expect(runAgent3Mock).not.toHaveBeenCalled();
+
+    // Run is marked degraded (not done) so the UI knows to show the
+    // "no verifiable DMs" panel instead of an empty Outreach tab.
+    expect(degradeRunMock).toHaveBeenCalledOnce();
+    expect(completeRunMock).not.toHaveBeenCalled();
+
+    // Final payload has email: null + degraded: true.
+    const finalEvent = events.find((e) => e.type === "final_result");
+    expect(finalEvent).toBeDefined();
+    const payload = (finalEvent as { payload: { email: unknown; degraded: boolean } })
+      .payload;
+    expect(payload.email).toBeNull();
+    expect(payload.degraded).toBe(true);
+
+    // Stream still emits a synthetic agent_start + agent_done for
+    // agent 3 so the timeline doesn't hang on the third card. Plus
+    // an agent_thinking explaining why it was skipped.
+    const agent3Events = events.filter(
+      (e) => "agent" in e && (e as { agent: number }).agent === 3
+    );
+    expect(agent3Events.map((e) => e.type)).toEqual([
+      "agent_start",
+      "agent_thinking",
+      "agent_done",
+    ]);
+  });
+
   it("flags degraded when Agent 3 returns degraded=true", async () => {
     runAgent1Mock.mockResolvedValueOnce(RECON);
     runAgent2Mock.mockResolvedValueOnce(PEOPLE);
