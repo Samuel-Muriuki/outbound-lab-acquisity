@@ -108,7 +108,13 @@ async function runOnce(
         system: RECONNAISSANCE_SYSTEM,
         messages,
         tools: TOOLS,
-        temperature: 0.2,
+        // 0.1 was 0.2 — Agent 1's job is purely factual extraction
+        // (company name, what they sell, ICP, recent signals). Lower
+        // temperature reduces invented specifics like the "612%
+        // growth" leak we shipped a regex gate for downstream — fewer
+        // attempts to fabricate at the source means fewer
+        // false-positive retries and faster cold runs.
+        temperature: 0.1,
         maxTokens: 2_048,
         // No responseFormat: "json" — Groq rejects JSON mode + tools in
         // the same request. The system prompt instructs JSON-only output
