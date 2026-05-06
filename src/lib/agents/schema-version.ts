@@ -23,9 +23,12 @@ import "server-only";
  *       /leadership, /people, /story, /company, /our-team) on the
  *       target domain in addition to brief.sources — broadens
  *       the founder/leader-name detection surface
+ *   8 — agent-2 engineering-leadership coverage as a first-class slot
+ *       (CTO / VP Eng / founding engineer) + 4-call cap → 5-call cap
+ *       to make room without sacrificing existing roles
  *
  * Pattern: when in doubt, bump. The cost is one extra ~30s research
  * run on the next visit per domain — far cheaper than serving stale,
  * regression-flavoured output to a recruiter.
  */
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
