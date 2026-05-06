@@ -19,9 +19,13 @@ import "server-only";
  *   6 — web_fetch SPA fallback via Tavily (rendered text for SPAs;
  *       changes what Agent 1 sees from JS-heavy targets like
  *       acquisity.ai itself, Linear, Vercel, Supabase)
+ *   7 — agent-2 trusted-corpus seed-path probe (/about, /team,
+ *       /leadership, /people, /story, /company, /our-team) on the
+ *       target domain in addition to brief.sources — broadens
+ *       the founder/leader-name detection surface
  *
  * Pattern: when in doubt, bump. The cost is one extra ~30s research
  * run on the next visit per domain — far cheaper than serving stale,
  * regression-flavoured output to a recruiter.
  */
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;

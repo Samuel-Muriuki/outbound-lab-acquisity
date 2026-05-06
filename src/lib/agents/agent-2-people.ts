@@ -166,11 +166,46 @@ function deriveTargetDomain(brief: ReconnaissanceOutputT): string | null {
 }
 
 /**
- * Fetch the brief's target-domain sources once and concatenate their
- * bodies into a single trusted corpus. Used to verify that a DM
- * surfaced from a third-party source (e.g. LinkedIn, where fetches
- * usually return a login wall) actually appears on the target
- * company's own pages.
+ * Conventional team / about page paths that almost every B2B site
+ * uses. Probed in addition to the recon brief's cited sources so the
+ * trusted corpus has more bodies to match founder / leader names
+ * against — closes the case where Agent 1 cites only the homepage
+ * (which on an SPA strips to nothing useful) but the company's
+ * `/team` or `/story` lists every founder.
+ *
+ * Order matters loosely — most-likely-to-exist paths first to bias
+ * the parallel fetch toward fast hits, but every path is tried
+ * regardless. 404s contribute nothing to the corpus and cost ~no
+ * time (fast HTTP error path).
+ */
+const SEED_TEAM_PATHS: ReadonlyArray<string> = [
+  "/about",
+  "/team",
+  "/leadership",
+  "/people",
+  "/story",
+  "/company",
+  "/our-team",
+];
+
+function normaliseUrlForDedup(url: string): string {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./, "").toLowerCase();
+    const path = u.pathname.replace(/\/$/, "").toLowerCase() || "/";
+    return `${host}${path}`;
+  } catch {
+    return url.toLowerCase();
+  }
+}
+
+/**
+ * Fetch the brief's target-domain sources PLUS a small set of
+ * conventional team-page paths once and concatenate their bodies
+ * into a single trusted corpus. Used to verify that a DM surfaced
+ * from a third-party source (e.g. LinkedIn, where fetches usually
+ * return a login wall) actually appears on the target company's
+ * own pages.
  *
  * Returns "" on any failure — callers treat that as "no trusted
  * corpus available, fall through to Tier 2 verification."
@@ -180,7 +215,7 @@ async function buildTrustedCorpus(
   targetDomain: string | null
 ): Promise<string> {
   if (!targetDomain) return "";
-  const targetSources = brief.sources.filter((url) => {
+  const briefSources = brief.sources.filter((url) => {
     try {
       const host = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
       return host === targetDomain || host.endsWith(`.${targetDomain}`);
@@ -188,10 +223,24 @@ async function buildTrustedCorpus(
       return false;
     }
   });
-  if (targetSources.length === 0) return "";
+
+  // Seed paths on the bare apex domain — modern sites redirect www↔apex
+  // transparently. De-duplicate against URLs the brief already cited.
+  const seenKeys = new Set(briefSources.map(normaliseUrlForDedup));
+  const seedSources: string[] = [];
+  for (const path of SEED_TEAM_PATHS) {
+    const candidate = `https://${targetDomain}${path}`;
+    const key = normaliseUrlForDedup(candidate);
+    if (seenKeys.has(key)) continue;
+    seenKeys.add(key);
+    seedSources.push(candidate);
+  }
+
+  const allSources = [...briefSources, ...seedSources];
+  if (allSources.length === 0) return "";
 
   const bodies = await Promise.all(
-    targetSources.map(async (url) => {
+    allSources.map(async (url) => {
       try {
         return (await webFetchTool.execute({ url })).toLowerCase();
       } catch {
