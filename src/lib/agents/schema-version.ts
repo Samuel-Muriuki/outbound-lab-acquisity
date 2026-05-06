@@ -26,9 +26,13 @@ import "server-only";
  *   8 — agent-2 engineering-leadership coverage as a first-class slot
  *       (CTO / VP Eng / founding engineer) + 4-call cap → 5-call cap
  *       to make room without sacrificing existing roles
+ *   9 — orchestrator empty-DM resilience: skip Agent 3 when Agent 2
+ *       returns zero verifiable decision makers, surface degraded
+ *       state to UI instead of letting Agent 3 hallucinate a
+ *       recipient from the buyer-persona placeholder
  *
  * Pattern: when in doubt, bump. The cost is one extra ~30s research
  * run on the next visit per domain — far cheaper than serving stale,
  * regression-flavoured output to a recruiter.
  */
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
