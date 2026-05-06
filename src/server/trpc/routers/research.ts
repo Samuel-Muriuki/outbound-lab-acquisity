@@ -282,7 +282,12 @@ export const researchRouter = router({
             /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
             { message: "Invalid run id." }
           ),
-        targetIndex: z.number().int().min(0).max(20),
+        /** When omitted, defaults to the agent's first-DM behaviour. */
+        targetIndex: z.number().int().min(0).max(20).optional(),
+        /** When omitted, uses the channel chosen at run creation. */
+        channel: z.enum(["email", "linkedin", "x"]).optional(),
+        /** When omitted, uses the tone chosen at run creation. */
+        tone: z.enum(["cold", "warm"]).optional(),
       })
     )
     .mutation(async ({ input }) => {
@@ -323,12 +328,22 @@ export const researchRouter = router({
         });
       }
 
-      if (input.targetIndex >= data.result.people.decision_makers.length) {
+      // targetIndex bounds check — only when explicitly provided AND
+      // out of range. Default (omitted) falls through to Agent 3's
+      // first-DM behaviour, which gracefully handles empty DM lists.
+      if (
+        input.targetIndex !== undefined &&
+        input.targetIndex > 0 &&
+        input.targetIndex >= data.result.people.decision_makers.length
+      ) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "That decision maker doesn't exist on this run.",
         });
       }
+
+      const channel = input.channel ?? data.channel;
+      const tone = input.tone ?? data.tone;
 
       try {
         const result = await runAgent3(
@@ -339,8 +354,8 @@ export const researchRouter = router({
             /* no-op — this is a one-shot mutation, not a stream */
           },
           {
-            tone: data.tone,
-            channel: data.channel,
+            tone,
+            channel,
             targetIndex: input.targetIndex,
           }
         );

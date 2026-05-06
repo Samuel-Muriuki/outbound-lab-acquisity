@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type ComponentType, type SVGProps } from "react";
-import { ArrowUpRight, Copy, Loader2, Mail, RefreshCw } from "lucide-react";
+import { ArrowUpRight, Copy, Loader2, Mail, RefreshCw, Send } from "lucide-react";
 import { toast } from "sonner";
 import { TRPCClientError } from "@trpc/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -83,7 +83,6 @@ function isUnknownSize(value: string): boolean {
 export function ResultCard({ result, runId }: ResultCardProps) {
   const { recon, people, degraded, forbiddenReason, email } = result;
   const channel = email.channel ?? "email";
-  const channelLabel = CHANNEL_LABEL[channel];
   const ChannelIcon = CHANNEL_ICON[channel];
 
   return (
@@ -126,7 +125,7 @@ export function ResultCard({ result, runId }: ResultCardProps) {
           </TabsTrigger>
           <TabsTrigger value="email">
             <span className="inline-flex items-center gap-1.5">
-              {channelLabel}
+              Outreach
               <ChannelIcon className="size-3.5 text-brand-secondary" aria-hidden />
             </span>
           </TabsTrigger>
@@ -280,27 +279,32 @@ function EmailPanel({ result, runId }: ResultCardProps) {
     }
   }
 
-  async function handleRegenerate(targetIndex: number) {
+  async function handleRegenerate(args: {
+    targetIndex?: number;
+    channel?: "email" | "linkedin" | "x";
+  }) {
     if (!runId) return;
     if (isRegenerating) return;
-    if (targetIndex === activeIndex) return;
     setIsRegenerating(true);
     try {
       const res = await trpc.research.regenerateEmail.mutate({
         id: runId,
-        targetIndex,
+        ...(args.targetIndex !== undefined
+          ? { targetIndex: args.targetIndex }
+          : {}),
+        ...(args.channel !== undefined ? { channel: args.channel } : {}),
       });
       setEmail(res.email);
-      toast.success(
-        `Rewritten for ${res.email.to.name}.`,
-        res.degraded
-          ? {
-              description:
-                res.forbiddenReason ??
-                "Draft was retried — review carefully before sending.",
-            }
-          : undefined
-      );
+      const newChannel = res.email.channel ?? "email";
+      const channelLabel = CHANNEL_LABEL[newChannel];
+      const description = res.degraded
+        ? res.forbiddenReason ??
+          "Draft was retried — review carefully before sending."
+        : undefined;
+      const message = args.channel
+        ? `Rewritten as ${channelLabel} for ${res.email.to.name}.`
+        : `Rewritten for ${res.email.to.name}.`;
+      toast.success(message, description ? { description } : undefined);
     } catch (err) {
       if (err instanceof TRPCClientError) {
         toast.error(err.message || "Could not regenerate. Try again.");
@@ -312,16 +316,68 @@ function EmailPanel({ result, runId }: ResultCardProps) {
     }
   }
 
-  const canRegenerate =
+  const canRegenerateTarget =
     runId !== undefined && people.decision_makers.length > 1;
+  const canSwitchChannel = runId !== undefined;
+
+  const CHANNEL_OPTIONS: ReadonlyArray<{
+    value: "email" | "linkedin" | "x";
+    label: string;
+  }> = [
+    { value: "email", label: "Email" },
+    { value: "linkedin", label: "LinkedIn" },
+    { value: "x", label: "X" },
+  ];
 
   return (
     <div className="mt-4 rounded-xl border border-border bg-background p-5">
-      {canRegenerate && (
+      {canSwitchChannel && (
+        <div
+          role="radiogroup"
+          aria-label="Outreach channel"
+          className="mb-3 -mt-1 flex flex-wrap items-center gap-2 text-xs"
+        >
+          <span className="text-subtle-foreground">Channel:</span>
+          {CHANNEL_OPTIONS.map((opt) => {
+            const Icon = CHANNEL_ICON[opt.value];
+            const selected = opt.value === channel;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                onClick={() => {
+                  if (selected) return;
+                  handleRegenerate({ channel: opt.value });
+                }}
+                disabled={isRegenerating}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-medium transition-colors duration-200 [transition-timing-function:var(--ease-out)]",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40",
+                  selected
+                    ? "border-brand-secondary/60 bg-brand-secondary/10 text-foreground"
+                    : "border-border bg-surface-1 text-muted-foreground hover:border-brand-secondary/40 hover:text-foreground",
+                  isRegenerating && "cursor-wait opacity-60"
+                )}
+              >
+                {selected && isRegenerating ? (
+                  <Loader2 className="size-3 animate-spin" aria-hidden />
+                ) : (
+                  <Icon className="size-3" aria-hidden />
+                )}
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {canRegenerateTarget && (
         <div
           role="radiogroup"
           aria-label="Write this message to"
-          className="mb-4 -mt-1 flex flex-wrap items-center gap-2 text-xs"
+          className="mb-4 flex flex-wrap items-center gap-2 text-xs"
         >
           <span className="text-subtle-foreground">Write to:</span>
           {people.decision_makers.map((dm, i) => {
@@ -332,7 +388,10 @@ function EmailPanel({ result, runId }: ResultCardProps) {
                 type="button"
                 role="radio"
                 aria-checked={selected}
-                onClick={() => handleRegenerate(i)}
+                onClick={() => {
+                  if (selected) return;
+                  handleRegenerate({ targetIndex: i });
+                }}
                 disabled={isRegenerating}
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-medium transition-colors duration-200 [transition-timing-function:var(--ease-out)]",
@@ -396,6 +455,16 @@ function EmailPanel({ result, runId }: ResultCardProps) {
             <Copy className="size-3.5" aria-hidden />
             Copy {CHANNEL_LABEL[channel].toLowerCase()}
           </button>
+          {channel === "email" && (
+            <a
+              href={buildMailtoHref(email.subject, email.body)}
+              title="Open in your default mail client. Recipient is left empty — paste the address yourself."
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-surface-1 px-3 text-sm font-medium text-foreground transition-colors duration-200 [transition-timing-function:var(--ease-out)] hover:border-brand-secondary/60 hover:bg-surface-2"
+            >
+              <Send className="size-3.5" aria-hidden />
+              Open in mail client
+            </a>
+          )}
           <button
             type="button"
             disabled
@@ -523,6 +592,19 @@ function hostnameOf(url: string): string {
   } catch {
     return url;
   }
+}
+
+/**
+ * Build a `mailto:` href with the subject + body URL-encoded. The
+ * recipient is intentionally left empty — Agent 3 doesn't (and
+ * shouldn't) try to scrape personal email addresses, so the user
+ * pastes the recipient themselves in their mail client.
+ */
+function buildMailtoHref(subject: string | null, body: string): string {
+  const params = new URLSearchParams();
+  if (subject) params.set("subject", subject);
+  params.set("body", body);
+  return `mailto:?${params.toString()}`;
 }
 
 interface SourceEntry {
