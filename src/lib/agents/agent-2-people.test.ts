@@ -177,6 +177,132 @@ describe("runAgent2()", () => {
     });
   });
 
+  it("attaches confidence='high' + sources[] when source is on target domain", async () => {
+    chatMock.mockResolvedValueOnce(
+      makeChatResult({
+        text: JSON.stringify({
+          ...VALID_OUTPUT,
+          decision_makers: [
+            {
+              name: "Tasnim A.",
+              role: "Global TA Leader",
+              why_them: "First-party citation on Acquisity's own page.",
+              source_url: "https://acquisity.ai/team",
+              linkedin_url: "https://linkedin.com/in/tasnim-a",
+            },
+          ],
+        }),
+      })
+    );
+    webFetchExecute.mockResolvedValue("Acquisity homepage content.");
+
+    const { emit } = captureEvents();
+    const out = await runAgent2(RECON_BRIEF, "run-id", emit);
+    const dm = out.decision_makers[0]!;
+    expect(dm.confidence).toBe("high");
+    // sources should include the source_url and linkedin_url.
+    expect(dm.sources).toContain("https://acquisity.ai/team");
+    expect(dm.sources).toContain("https://linkedin.com/in/tasnim-a");
+  });
+
+  it("attaches confidence='high' for Tier 2 LinkedIn-cited DM (LinkedIn is curated HIGH)", async () => {
+    chatMock.mockResolvedValueOnce(
+      makeChatResult({
+        text: JSON.stringify({
+          ...VALID_OUTPUT,
+          decision_makers: [
+            {
+              name: "Jared Stauffer",
+              role: "CEO",
+              why_them: "Founder cited via LinkedIn; name on /story.",
+              source_url: "https://linkedin.com/in/jaredpstauffer",
+              linkedin_url: "https://linkedin.com/in/jaredpstauffer",
+            },
+          ],
+        }),
+      })
+    );
+    webFetchExecute.mockImplementation(async ({ url }: { url: string }) => {
+      if (url === "https://acquisity.ai/story") {
+        return "Acquisity was founded by Jared Stauffer.";
+      }
+      if (url.startsWith("https://acquisity.ai")) {
+        return "Acquisity homepage marketing copy.";
+      }
+      return "";
+    });
+
+    const { emit } = captureEvents();
+    const out = await runAgent2(RECON_BRIEF, "run-id", emit);
+    const dm = out.decision_makers[0]!;
+    expect(dm.confidence).toBe("high");
+    // Sources include LinkedIn (HIGH) AND the target-domain page that
+    // contained the name.
+    expect(dm.sources).toContain("https://linkedin.com/in/jaredpstauffer");
+    expect(dm.sources).toContain("https://acquisity.ai/story");
+  });
+
+  it("attaches confidence='medium' when only verifying source is a curated MEDIUM platform", async () => {
+    chatMock.mockResolvedValueOnce(
+      makeChatResult({
+        text: JSON.stringify({
+          ...VALID_OUTPUT,
+          decision_makers: [
+            {
+              name: "Marcus Reed",
+              role: "Head of Sales",
+              why_them: "Profiled in a Substack post.",
+              source_url: "https://salesindustry.substack.com/p/acquisity-feature",
+              linkedin_url: null,
+            },
+          ],
+        }),
+      })
+    );
+    webFetchExecute.mockImplementation(async ({ url }: { url: string }) => {
+      if (url.startsWith("https://acquisity.ai")) {
+        return "No team mentions here.";
+      }
+      return "Marcus Reed leads sales at Acquisity, the AI-powered B2B growth system.";
+    });
+
+    const { emit } = captureEvents();
+    const out = await runAgent2(RECON_BRIEF, "run-id", emit);
+    const dm = out.decision_makers[0]!;
+    expect(dm.confidence).toBe("medium");
+    expect(dm.sources).toEqual([
+      "https://salesindustry.substack.com/p/acquisity-feature",
+    ]);
+  });
+
+  it("attaches confidence='low' when verifying source is uncurated", async () => {
+    chatMock.mockResolvedValueOnce(
+      makeChatResult({
+        text: JSON.stringify({
+          ...VALID_OUTPUT,
+          decision_makers: [
+            {
+              name: "Marcus Reed",
+              role: "Head of Sales",
+              why_them: "Profiled on a generic SEO blog.",
+              source_url: "https://random-seo-blog.example/article",
+              linkedin_url: null,
+            },
+          ],
+        }),
+      })
+    );
+    webFetchExecute.mockImplementation(async ({ url }: { url: string }) => {
+      if (url.startsWith("https://acquisity.ai")) return "No team mentions here.";
+      return "Marcus Reed leads sales at Acquisity.";
+    });
+
+    const { emit } = captureEvents();
+    const out = await runAgent2(RECON_BRIEF, "run-id", emit);
+    const dm = out.decision_makers[0]!;
+    expect(dm.confidence).toBe("low");
+  });
+
   it("trusted corpus probes seed team paths (/about, /team, …) in addition to brief sources", async () => {
     chatMock.mockResolvedValueOnce(
       makeChatResult({
