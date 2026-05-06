@@ -30,9 +30,14 @@ import "server-only";
  *       returns zero verifiable decision makers, surface degraded
  *       state to UI instead of letting Agent 3 hallucinate a
  *       recipient from the buyer-persona placeholder
+ *  10 — Bundle B: per-DM confidence + sources fields populated by
+ *       validateDecisionMakers() — confidence=highestTier across
+ *       the verifying URLs (source_url + target pages with name +
+ *       linkedin_url). UI renders HIGH/MEDIUM/LOW pills next to
+ *       names; old cached rows lack these fields and render no pill
  *
  * Pattern: when in doubt, bump. The cost is one extra ~30s research
  * run on the next visit per domain — far cheaper than serving stale,
  * regression-flavoured output to a recruiter.
  */
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 10;

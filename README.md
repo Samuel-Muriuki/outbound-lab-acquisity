@@ -89,6 +89,9 @@ The "Run on Acquisity" CTA needs to be near-instant after the first run. Vector 
 **Why server-side validation gates between agents?**
 Agent 2 outputs are post-validated — each decision-maker name must appear in the cited source URL or it's dropped. No hallucinated people reach the email. Agent 3 output is regex-checked for forbidden phrases ("hope this email finds you well", "amazing", "game-changing") and retried if violated.
 
+**Why static curated source tiers instead of learned scoring?**
+Each accepted decision maker carries a `confidence` field — `high` / `medium` / `low` — surfaced as a small pill next to their name in the People tab. The classifier (`src/lib/agents/source-tiers.ts`) is a static curated list: HIGH = first-party (target's own domain) + LinkedIn / Crunchbase / Bloomberg / Reuters / TechCrunch / Forbes / WSJ / NYT / Y Combinator. MEDIUM = curated developer/industry platforms (Medium / dev.to / GitHub / Substack / Pragmatic Engineer). LOW = anything else, including AI-generated wikis (`wikigenius.org`, `*.fandom.com`), content farms, and generic SEO blogs. Confidence is the highest tier across all verifying sources for a given DM (source URL + target-domain pages whose body mentions the name + LinkedIn URL when present). Why static lists rather than logging-based ranking or ML: tiering is *additive metadata*, not a hard filter — a wrong tier shouldn't drop a real person, but a learned tier could drift silently as the corpus changes. Curated lists are versioned with the code, transparent, and a code change to update. If running this in production with real volume, the next step would be triangulation requirements per tier (e.g. require ≥2 sources for HIGH) — but that's deferred until the curated tiers prove insufficient.
+
 **Why dark mode by default?**
 The audience uses agent products (Cursor, Linear, Vercel) that default dark. Light mode is a toggle, not a fight.
 
