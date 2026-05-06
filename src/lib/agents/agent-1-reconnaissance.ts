@@ -12,6 +12,7 @@ import {
 import { webSearchTool } from "./tools/web-search";
 import { webFetchTool } from "./tools/web-fetch";
 import { extractJSON } from "./utils/extract-json";
+import { verifySignalsAgainstSources } from "./utils/verify-signals";
 import type { EmitFn } from "./stream-events";
 
 const TOOLS: ToolDefinition[] = [
@@ -66,7 +67,17 @@ export async function runAgent1(
 
   for (let attempt = 0; attempt < MAX_RETRIES + 1; attempt++) {
     try {
-      return await runOnce(targetUrl, emit);
+      const raw = await runOnce(targetUrl, emit);
+      // Source-grounding pass: drop any recent_signals entry whose
+      // verifiable specifics (numbers / fundraising rounds) can't be
+      // found in any cited source body. Closes the upstream half of
+      // the "612% growth" hallucination regression.
+      const verifiedSignals = await verifySignalsAgainstSources(
+        raw.recent_signals,
+        raw.sources,
+        emit
+      );
+      return { ...raw, recent_signals: verifiedSignals };
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
       if (attempt < MAX_RETRIES) {
