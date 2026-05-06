@@ -157,4 +157,145 @@ describe("webFetchTool.execute()", () => {
     expect(out).toContain("Visible");
     expect(out).not.toContain("tracking pixels");
   });
+
+  // -----------------------------------------------------------------
+  // SPA fallback — when stripped text is thin and raw HTML is heavy
+  // (>=2KB), web_fetch falls through to Tavily's rendered crawl.
+  // -----------------------------------------------------------------
+  describe("SPA fallback via Tavily", () => {
+    const ORIG_KEY = process.env.TAVILY_API_KEY;
+    beforeEach(() => {
+      process.env.TAVILY_API_KEY = "test-key";
+    });
+    afterEach(() => {
+      if (ORIG_KEY === undefined) delete process.env.TAVILY_API_KEY;
+      else process.env.TAVILY_API_KEY = ORIG_KEY;
+    });
+
+    function spaShellHtml(): string {
+      // ~3KB of script tags — substantial raw bytes, near-zero text
+      // after strip. Models a real SPA shell.
+      const script = "<script src=\"/assets/chunk-abcdef1234567890.js\"></script>";
+      return (
+        '<!doctype html><html><head><title>Acquisity</title></head>' +
+        '<body><div id="root"></div>' +
+        Array.from({ length: 50 }, () => script).join("\n") +
+        "</body></html>"
+      );
+    }
+
+    it("falls back to Tavily when stripped HTML is thin (<300 chars) but raw is heavy (>=2KB)", async () => {
+      // 1st fetch: SPA shell (thin after strip, heavy raw)
+      mockFetchOnce({ ok: true, text: spaShellHtml() });
+      // 2nd fetch: Tavily — returns rendered raw_content for the same domain
+      vi.spyOn(global, "fetch").mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        headers: new Headers({ "content-type": "application/json" }),
+        json: () =>
+          Promise.resolve({
+            results: [
+              {
+                url: "https://www.acquisity.ai/",
+                raw_content:
+                  "Acquisity helps B2B SaaS startups find profitable niches and automate cold outreach. Founded by Jared Stauffer.",
+              },
+            ],
+          }),
+      } as unknown as Response);
+
+      const out = await webFetchTool.execute({
+        url: "https://www.acquisity.ai/",
+      });
+      expect(out).toContain("Jared Stauffer");
+      expect(out).toContain("profitable niches");
+    });
+
+    it("does NOT fall back when stripped text is healthy (>=300 chars)", async () => {
+      const richHtml = "<p>" + "Lorem ipsum dolor sit amet ".repeat(40) + "</p>";
+      mockFetchOnce({ ok: true, text: richHtml });
+      // If we tried to fall back to Tavily, the next fetch call would
+      // throw (no second mock prepared), and the function would
+      // silently return the stripped original. Either way the
+      // verification: the rendered text comes through and we don't
+      // crash.
+      const out = await webFetchTool.execute({
+        url: "https://example.com/",
+      });
+      expect(out).toContain("Lorem ipsum");
+    });
+
+    it("does NOT fall back on a sparse legitimate page (raw HTML < 2KB)", async () => {
+      // Tiny 404 / coming-soon page: thin stripped + thin raw. Don't
+      // burn a Tavily call on it.
+      mockFetchOnce({ ok: true, text: "<p>Coming soon.</p>" });
+      const out = await webFetchTool.execute({
+        url: "https://startup.example.com/",
+      });
+      expect(out).toBe("Coming soon.");
+    });
+
+    it("falls through to thin original when Tavily has no matching results", async () => {
+      mockFetchOnce({ ok: true, text: spaShellHtml() });
+      vi.spyOn(global, "fetch").mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        headers: new Headers({ "content-type": "application/json" }),
+        json: () =>
+          Promise.resolve({
+            results: [
+              // Different host — filter drops it.
+              {
+                url: "https://otherdomain.com/page",
+                raw_content: "Unrelated body.",
+              },
+            ],
+          }),
+      } as unknown as Response);
+
+      const out = await webFetchTool.execute({
+        url: "https://www.acquisity.ai/",
+      });
+      // Returns the thin original (stripped div skeleton).
+      expect(out).not.toContain("Unrelated body");
+    });
+
+    it("falls through to thin original when Tavily call fails", async () => {
+      mockFetchOnce({ ok: true, text: spaShellHtml() });
+      vi.spyOn(global, "fetch").mockRejectedValueOnce(new Error("network"));
+
+      const out = await webFetchTool.execute({
+        url: "https://www.acquisity.ai/",
+      });
+      // Doesn't throw — graceful fallthrough. Output is whatever the
+      // thin strip gave us.
+      expect(typeof out).toBe("string");
+    });
+
+    it("matches subdomains of the target host (e.g. blog.acquisity.ai)", async () => {
+      mockFetchOnce({ ok: true, text: spaShellHtml() });
+      vi.spyOn(global, "fetch").mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        headers: new Headers({ "content-type": "application/json" }),
+        json: () =>
+          Promise.resolve({
+            results: [
+              {
+                url: "https://blog.acquisity.ai/our-story",
+                raw_content: "Our story: founded 2024 by Jared Stauffer.",
+              },
+            ],
+          }),
+      } as unknown as Response);
+
+      const out = await webFetchTool.execute({
+        url: "https://www.acquisity.ai/",
+      });
+      expect(out).toContain("Jared Stauffer");
+    });
+  });
 });

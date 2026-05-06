@@ -18,6 +18,23 @@ const FETCH_TIMEOUT_MS = 15_000;
 const MAX_OUTPUT_CHARS = 4_000;
 const USER_AGENT = "OutboundLab/1.0 (research bot; +https://outbound-lab-acquisity.vercel.app)";
 
+/**
+ * SPA detection thresholds. When a fetch returns substantial HTML
+ * (>= 2KB raw) but the strip-to-text output is tiny (< 300 chars),
+ * the page is almost certainly a JS-rendered SPA — `<div id="root">`
+ * skeleton plus script tags, no rendered content. Fall back to a
+ * Tavily search of the same URL: Tavily crawls with a real browser
+ * and returns rendered text.
+ *
+ * Why the dual threshold: avoids false-positives on legitimate
+ * sparse pages (404s, "coming soon" landings) which produce both
+ * thin HTML and thin text. Only triggers when there's *enough* HTML
+ * to suggest a real page that just hasn't rendered for our fetch.
+ */
+const SPA_MIN_USEFUL_CHARS = 300;
+const SPA_MIN_HTML_BYTES = 2_048;
+const TAVILY_ENDPOINT = "https://api.tavily.com/search";
+
 const WebFetchInput = z.object({
   url: z
     .string()
@@ -96,9 +113,107 @@ export const webFetchTool: ToolDefinition<typeof WebFetchInput> = {
     }
 
     const raw = await response.text();
-    return stripToText(raw).slice(0, MAX_OUTPUT_CHARS);
+    const stripped = stripToText(raw);
+
+    // SPA detection — substantial HTML payload but the strip-to-text
+    // output is thin. Modern B2B targets a recruiter might paste
+    // (Linear, Vercel, Supabase, Acquisity itself) ship as SPAs whose
+    // SSR-less HTML is just `<div id="root"></div>` plus script tags.
+    // Fall back to Tavily's rendered crawl for the same URL.
+    if (
+      stripped.length < SPA_MIN_USEFUL_CHARS &&
+      raw.length >= SPA_MIN_HTML_BYTES
+    ) {
+      const tavilyContent = await fetchViaTavily(parsed);
+      if (tavilyContent) return tavilyContent.slice(0, MAX_OUTPUT_CHARS);
+      // Tavily fallback failed (no key, no matching results, fetch
+      // error) — fall through and return the thin original; better
+      // than throwing. Agent will see how little it got and reason
+      // about whether to search more.
+    }
+
+    return stripped.slice(0, MAX_OUTPUT_CHARS);
   },
 };
+
+interface TavilyRawResult {
+  url?: string;
+  raw_content?: string;
+  content?: string;
+}
+
+interface TavilyRawResponse {
+  results?: TavilyRawResult[];
+}
+
+/**
+ * SPA fallback — fetch rendered text via Tavily. Tavily crawls with
+ * a real browser, so its `raw_content` field contains the rendered
+ * page text even when our direct GET only sees the SSR shell.
+ *
+ * Filters Tavily's results to those matching the target's hostname
+ * (or subdomain) — concatenates their rendered bodies. Returns null
+ * on any failure (missing key, network error, no matching results)
+ * so callers can gracefully fall through to the thin original.
+ */
+async function fetchViaTavily(target: URL): Promise<string | null> {
+  const apiKey = process.env.TAVILY_API_KEY;
+  if (!apiKey) return null;
+
+  let response: Response;
+  try {
+    response = await fetch(TAVILY_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_key: apiKey,
+        query: target.toString(),
+        include_raw_content: true,
+        max_results: 3,
+        search_depth: "basic",
+        include_answer: false,
+      }),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+  } catch {
+    return null;
+  }
+  if (!response.ok) return null;
+
+  let body: TavilyRawResponse;
+  try {
+    body = (await response.json()) as TavilyRawResponse;
+  } catch {
+    return null;
+  }
+  if (!body.results || body.results.length === 0) return null;
+
+  const targetHost = target.hostname.replace(/^www\./, "").toLowerCase();
+  const bodies: string[] = [];
+  for (const r of body.results) {
+    if (!r.url) continue;
+    let resultHost: string;
+    try {
+      resultHost = new URL(r.url).hostname.replace(/^www\./, "").toLowerCase();
+    } catch {
+      continue;
+    }
+    if (
+      resultHost !== targetHost &&
+      !resultHost.endsWith(`.${targetHost}`)
+    ) {
+      continue;
+    }
+    const text = (r.raw_content || r.content || "").trim();
+    if (text) bodies.push(text);
+  }
+
+  if (bodies.length === 0) return null;
+  // Collapse whitespace for parity with the direct-fetch path's
+  // strip output — agents shouldn't see formatting differences
+  // between fast-path and fallback.
+  return bodies.join("\n\n").replace(/\s+/g, " ").trim();
+}
 
 function isTextContentType(contentType: string): boolean {
   const lower = contentType.toLowerCase();
