@@ -160,6 +160,43 @@ function deriveTargetDomain(brief: ReconnaissanceOutputT): string | null {
 }
 
 /**
+ * Fetch the brief's target-domain sources once and concatenate their
+ * bodies into a single trusted corpus. Used to verify that a DM
+ * surfaced from a third-party source (e.g. LinkedIn, where fetches
+ * usually return a login wall) actually appears on the target
+ * company's own pages.
+ *
+ * Returns "" on any failure — callers treat that as "no trusted
+ * corpus available, fall through to Tier 2 verification."
+ */
+async function buildTrustedCorpus(
+  brief: ReconnaissanceOutputT,
+  targetDomain: string | null
+): Promise<string> {
+  if (!targetDomain) return "";
+  const targetSources = brief.sources.filter((url) => {
+    try {
+      const host = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+      return host === targetDomain || host.endsWith(`.${targetDomain}`);
+    } catch {
+      return false;
+    }
+  });
+  if (targetSources.length === 0) return "";
+
+  const bodies = await Promise.all(
+    targetSources.map(async (url) => {
+      try {
+        return (await webFetchTool.execute({ url })).toLowerCase();
+      } catch {
+        return "";
+      }
+    })
+  );
+  return bodies.join("\n\n");
+}
+
+/**
  * True when the source URL's hostname is on the target domain (exact
  * match or subdomain — e.g. blog.acquisity.ai counts).
  */
@@ -209,19 +246,23 @@ function bodyMentionsTarget(
  * Post-validation gate per `.ai/docs/06-agent-system-design.md` §9.2,
  * tightened 2026-05-05 after the Hormozi/Acquisition.com regression
  * (different company with similar name was passing the slug check).
+ * Further softened 2026-05-06 with a target-corpus fallback: in
+ * practice many real DMs are surfaced via LinkedIn (where fetches
+ * return walls), so we also accept when the person's name appears on
+ * any of the target's OWN pages from the recon brief.
  *
- * Per decision maker, accept if EITHER:
- *   1. source_url is on the target's own domain (the company's own
- *      page is canonical — name appearing there is sufficient), OR
- *   2. source_url body contains BOTH the person's name AND a target-
+ * Per decision maker, accept if ANY of:
+ *   1. source_url is on the target's own domain (canonical) — accept
+ *   2. person's name appears on any target-domain page from
+ *      brief.sources (the founder is named on /about / /story /
+ *      /team etc. — accept even if the DM's source_url is LinkedIn)
+ *   3. source_url body contains BOTH the person's name AND a target-
  *      company signal (target_domain literal OR every non-filler
- *      token of the company_name). Catches the "right name, wrong
- *      company" failure mode.
+ *      token of the company_name) — third-party corroboration
  *
- * The previous slug-only fast path is gone. LinkedIn URLs that the
- * agent surfaces will fail body verification (login wall, no
- * target-company mention) — that's correct: we can't vouch for a
- * person we can't actually verify is at the target.
+ * Drop only when none of these hold. Catches the Hormozi-class bug
+ * (name only appears on a different company's site) without
+ * dropping legitimate founders cited via LinkedIn.
  */
 async function validateDecisionMakers(
   people: PeopleOutputT,
@@ -231,6 +272,11 @@ async function validateDecisionMakers(
   const targetDomain = deriveTargetDomain(brief);
   const companyName = brief.company_name;
 
+  // Build the trusted corpus once from target-domain pages cited in
+  // the recon brief. Empty if no target-domain sources or all fetches
+  // fail — callers fall through to Tier 3.
+  const trustedCorpus = await buildTrustedCorpus(brief, targetDomain);
+
   const verified = await Promise.all(
     people.decision_makers.map(async (dm) => {
       // Tier 1: source on the target's own domain — accept.
@@ -238,7 +284,16 @@ async function validateDecisionMakers(
         return dm;
       }
 
-      // Tier 2: cross-domain source — fetch and require BOTH name and
+      // Tier 2: name appears on the target's own pages, regardless of
+      // where the agent cited it from (LinkedIn slugs, etc).
+      if (
+        trustedCorpus.length > 0 &&
+        trustedCorpus.includes(dm.name.toLowerCase())
+      ) {
+        return dm;
+      }
+
+      // Tier 3: cross-domain source — fetch and require BOTH name and
       // target-company signal in body.
       let content: string;
       try {
@@ -248,7 +303,7 @@ async function validateDecisionMakers(
         emit({
           type: "agent_thinking",
           agent: 2,
-          delta: `Dropping "${dm.name}" — could not fetch ${dm.source_url} to verify cross-domain source: ${message}`,
+          delta: `Dropping "${dm.name}" — could not fetch ${dm.source_url} to verify cross-domain source, and name not on target's own pages: ${message}`,
         });
         return null;
       }
@@ -259,7 +314,7 @@ async function validateDecisionMakers(
         emit({
           type: "agent_thinking",
           agent: 2,
-          delta: `Dropping "${dm.name}" — name not found in ${dm.source_url} body.`,
+          delta: `Dropping "${dm.name}" — name not found in ${dm.source_url} body or on target's own pages.`,
         });
         return null;
       }
@@ -268,7 +323,7 @@ async function validateDecisionMakers(
         emit({
           type: "agent_thinking",
           agent: 2,
-          delta: `Dropping "${dm.name}" — source ${dm.source_url} does not mention target company "${companyName}". Likely a similarly-named different company.`,
+          delta: `Dropping "${dm.name}" — source ${dm.source_url} does not mention target company "${companyName}", and name not on target's own pages. Likely a similarly-named different company.`,
         });
         return null;
       }

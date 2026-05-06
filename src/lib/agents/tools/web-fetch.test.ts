@@ -145,7 +145,7 @@ describe("webFetchTool.execute()", () => {
 
     await expect(
       webFetchTool.execute({ url: "https://slow.example.com" })
-    ).rejects.toThrow(/Fetch timed out after 8000ms/);
+    ).rejects.toThrow(/Fetch timed out after 15000ms/);
   });
 
   it("removes <noscript> blocks", async () => {

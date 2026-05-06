@@ -3,7 +3,18 @@ import { z } from "zod";
 import type { ToolDefinition } from "../llm/types";
 import { isPrivateHostname } from "@/lib/validation/research-input";
 
-const FETCH_TIMEOUT_MS = 8_000;
+/**
+ * Fetch timeout — applies to both the model's web_fetch tool calls
+ * AND the post-validation gates in Agent 1 (source-grounding) and
+ * Agent 2 (cross-domain DM verification). 8s was too aggressive: many
+ * legitimate sources (Wikipedia mirrors, blog hosts, /story pages
+ * behind a CDN) complete in 9-12s, and dropping a real source for
+ * being a second slow caused valid decision makers to be rejected.
+ * 15s leaves enough headroom for the slowest viable corroboration
+ * sources without dragging the worst-case run time into the orchestrator's
+ * 90s ceiling.
+ */
+const FETCH_TIMEOUT_MS = 15_000;
 const MAX_OUTPUT_CHARS = 4_000;
 const USER_AGENT = "OutboundLab/1.0 (research bot; +https://outbound-lab-acquisity.vercel.app)";
 

@@ -102,19 +102,62 @@ afterEach(() => {
 });
 
 describe("runAgent2()", () => {
-  it("auto-accepts a DM when the source URL is on the target domain (no fetch needed)", async () => {
+  it("auto-accepts a DM when the source URL is on the target domain (no source fetch needed)", async () => {
     chatMock.mockResolvedValueOnce(
       makeChatResult({ text: JSON.stringify(VALID_OUTPUT) })
     );
     // VALID_OUTPUT source_url is https://acquisity.ai/team — host
-    // matches RECON_BRIEF.sources[0] hostname → Tier 1 accept, no fetch.
+    // matches RECON_BRIEF.sources[0] hostname → Tier 1 accept.
+    // The trusted-corpus build fetches brief.sources[0] but the DM's
+    // own source_url is never fetched.
+    webFetchExecute.mockResolvedValue("Acquisity homepage content.");
 
     const { emit, events } = captureEvents();
     const out = await runAgent2(RECON_BRIEF, "run-id", emit);
     expect(out.decision_makers).toHaveLength(1);
     expect(out.decision_makers[0]!.name).toBe("Tasnim A.");
-    expect(webFetchExecute).not.toHaveBeenCalled();
+    // The DM's own source_url is not fetched (only the brief source).
+    const fetchedUrls = webFetchExecute.mock.calls.map((c) => c[0].url);
+    expect(fetchedUrls).not.toContain("https://acquisity.ai/team");
     expect(events.find((e) => e.type === "provider_used")).toBeDefined();
+  });
+
+  it("Tier 2: accepts a LinkedIn-cited DM whose name appears on target's own pages", async () => {
+    // Real-world flow: agent finds Stauffer via search, cites his
+    // LinkedIn (linkedin.com/in/jaredpstauffer). LinkedIn fetch
+    // returns a wall, but his name IS on acquisity.ai/story. Tier 2
+    // catches this case via the trusted corpus.
+    chatMock.mockResolvedValueOnce(
+      makeChatResult({
+        text: JSON.stringify({
+          ...VALID_OUTPUT,
+          decision_makers: [
+            {
+              name: "Jared Stauffer",
+              role: "CEO",
+              why_them: "Founder of Acquisity, named on the company's story page.",
+              source_url: "https://linkedin.com/in/jaredpstauffer",
+              linkedin_url: "https://linkedin.com/in/jaredpstauffer",
+            },
+          ],
+        }),
+      })
+    );
+    // First fetch: brief.sources[0] = https://acquisity.ai (target
+    // domain), trusted corpus build. Returns body with Stauffer's
+    // name — Tier 2 accept, no further fetch needed.
+    webFetchExecute.mockResolvedValue(
+      "Acquisity story: Jared Stauffer founded the company in 2024."
+    );
+
+    const { emit } = captureEvents();
+    const out = await runAgent2(RECON_BRIEF, "run-id", emit);
+    expect(out.decision_makers).toHaveLength(1);
+    expect(out.decision_makers[0]!.name).toBe("Jared Stauffer");
+    // Trusted-corpus fetch was called for the target source.
+    expect(webFetchExecute).toHaveBeenCalledWith({
+      url: "https://acquisity.ai",
+    });
   });
 
   it("auto-accepts subdomains of the target (e.g. blog.acquisity.ai)", async () => {
@@ -134,13 +177,19 @@ describe("runAgent2()", () => {
         }),
       })
     );
+    webFetchExecute.mockResolvedValue("Acquisity homepage content.");
     const { emit } = captureEvents();
     const out = await runAgent2(RECON_BRIEF, "run-id", emit);
     expect(out.decision_makers).toHaveLength(1);
-    expect(webFetchExecute).not.toHaveBeenCalled();
+    // The DM's source_url (subdomain) is NOT fetched — Tier 1 accepts
+    // it. Only the brief sources are fetched (for the trusted corpus).
+    const fetchedUrls = webFetchExecute.mock.calls.map((c) => c[0].url);
+    expect(fetchedUrls).not.toContain(
+      "https://blog.acquisity.ai/why-we-hire"
+    );
   });
 
-  it("accepts a cross-domain source when body has BOTH name and target company name", async () => {
+  it("Tier 3: accepts a cross-domain source when body has BOTH name and target company name", async () => {
     chatMock.mockResolvedValueOnce(
       makeChatResult({
         text: JSON.stringify({
@@ -157,9 +206,15 @@ describe("runAgent2()", () => {
         }),
       })
     );
-    webFetchExecute.mockResolvedValue(
-      "Marcus Reed leads sales at Acquisity, the AI-powered B2B growth system."
-    );
+    // Trusted corpus build (brief.sources[0]) returns content WITHOUT
+    // Marcus Reed's name → Tier 2 misses → fall through to Tier 3
+    // which fetches the cross-domain source.
+    webFetchExecute.mockImplementation(async ({ url }: { url: string }) => {
+      if (url === "https://acquisity.ai") {
+        return "Acquisity homepage — no team mentions here.";
+      }
+      return "Marcus Reed leads sales at Acquisity, the AI-powered B2B growth system.";
+    });
 
     const { emit } = captureEvents();
     const out = await runAgent2(RECON_BRIEF, "run-id", emit);
@@ -173,7 +228,8 @@ describe("runAgent2()", () => {
     // Regression guard: this mirrors the live 2026-05-05 bug where
     // Leila Hormozi was returned as an Acquisity DM because her
     // LinkedIn slug matched her name. The new gate requires the
-    // target's company name to also appear in the source body.
+    // target's company name to also appear in the source body, AND
+    // her name doesn't appear on Acquisity's own pages either.
     chatMock.mockResolvedValueOnce(
       makeChatResult({
         text: JSON.stringify({
@@ -190,9 +246,14 @@ describe("runAgent2()", () => {
         }),
       })
     );
-    webFetchExecute.mockResolvedValue(
-      "Leila Hormozi is the Founder and CEO of Acquisition.com — a holding company..."
-    );
+    webFetchExecute.mockImplementation(async ({ url }: { url: string }) => {
+      if (url === "https://acquisity.ai") {
+        // Trusted corpus: Acquisity's own page does NOT mention Hormozi.
+        return "Acquisity is an AI-powered B2B growth platform. Founded 2024.";
+      }
+      // Cross-domain source: Acquisition.com page has Hormozi but not Acquisity.
+      return "Leila Hormozi is the Founder and CEO of Acquisition.com — a holding company...";
+    });
 
     const { emit, events } = captureEvents();
     const out = await runAgent2(RECON_BRIEF, "run-id", emit);
