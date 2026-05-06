@@ -1,10 +1,7 @@
 import Link from "next/link";
 import { Sparkles, ArrowUpRight } from "lucide-react";
 import type { SimilarRunRow } from "@/lib/db/queries";
-import {
-  formatAbsoluteDateTime,
-  formatRunDateTime,
-} from "@/lib/utils/format-date";
+import { RunTimestamp } from "@/components/run-timestamp";
 
 export interface RelatedRunsProps {
   runs: SimilarRunRow[];
@@ -81,13 +78,10 @@ export function RelatedRuns({ runs }: RelatedRunsProps) {
                   </span>
                 </div>
                 {run.completed_at && (
-                  <time
-                    dateTime={run.completed_at}
-                    title={formatAbsoluteDateTime(run.completed_at)}
+                  <RunTimestamp
+                    iso={run.completed_at}
                     className="mt-1.5 block font-mono text-[11px] tabular-nums text-subtle-foreground/70"
-                  >
-                    {formatRunDateTime(run.completed_at)}
-                  </time>
+                  />
                 )}
               </Link>
             </li>

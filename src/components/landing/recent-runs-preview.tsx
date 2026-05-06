@@ -4,10 +4,7 @@ import { getSessionId } from "@/lib/session/cookie";
 import { DeleteRunButton } from "@/components/delete-run-button";
 import { TiltedWrapper } from "@/components/tilted-wrapper";
 import { HoverElectricBorder } from "@/components/hover-electric-border";
-import {
-  formatAbsoluteDateTime,
-  formatRunDateTime,
-} from "@/lib/utils/format-date";
+import { RunTimestamp } from "@/components/run-timestamp";
 
 /**
  * Recent runs preview on the landing page.
@@ -85,13 +82,7 @@ export async function RecentRunsPreview() {
                           <>{(run.duration_ms / 1000).toFixed(1)}s</>
                         )}
                       </span>
-                      <time
-                        dateTime={run.completed_at}
-                        title={formatAbsoluteDateTime(run.completed_at)}
-                        className="truncate"
-                      >
-                        {formatRunDateTime(run.completed_at)}
-                      </time>
+                      <RunTimestamp iso={run.completed_at} className="truncate" />
                     </div>
                   </Link>
                 </TiltedWrapper>
