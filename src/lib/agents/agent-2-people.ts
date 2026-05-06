@@ -84,6 +84,12 @@ async function runOnce(
         // No responseFormat: "json" — Groq rejects JSON mode + tools in
         // the same request. The system prompt instructs JSON-only output
         // and extractJSON() handles any markdown-fence slips.
+        //
+        // Provider order override per the per-agent load-split policy:
+        // Agents 1 & 3 keep groq-first (streaming feel), Agent 2 — the
+        // heaviest tool-loop with the most context — goes to Gemini
+        // first to spread quota pressure away from Groq's TPM ceiling.
+        providerOrder: ["gemini", "groq", "openrouter"],
       },
       (provider) => emit({ type: "provider_used", agent: 2, provider })
     );

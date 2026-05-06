@@ -64,6 +64,18 @@ export interface ChatOptions {
   responseFormat?: "json" | "text";
   /** Abort signal forwarded to the underlying SDK. */
   abortSignal?: AbortSignal;
+  /**
+   * Per-call provider preference order. Default is the global locked
+   * order [groq, gemini, openrouter]. Agents that produce most of
+   * the daily token volume (Agent 2 — People & ICP, with the
+   * heaviest tool-loop context) override to gemini-first to load-
+   * split away from Groq's TPM ceiling.
+   *
+   * Providers not listed here are NOT consulted. Providers listed
+   * but unconfigured (no API key) are skipped, matching the default
+   * chain's behaviour.
+   */
+  providerOrder?: ProviderName[];
 }
 
 export type FinishReason = "stop" | "tool_calls" | "length" | "error";
