@@ -6,7 +6,8 @@
  *  - Post-validation gate: webFetchTool.execute() drops names not
  *    appearing in their cited source URL
  *  - Retry on Zod validation failure
- *  - 4-tool-call cap (vs Agent 1's 6)
+ *  - 5-tool-call cap (vs Agent 1's 6) — bumped from 4 to make room for
+ *    engineering-leadership coverage as a first-class slot
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatOptions, ChatResult } from "./llm/types";
@@ -437,8 +438,8 @@ describe("runAgent2()", () => {
     expect(events.filter((e) => e.type === "agent_thinking").length).toBeGreaterThan(0);
   });
 
-  it("injects a wrap-up nudge after hitting the 4-tool-call cap", async () => {
-    for (let i = 0; i < 4; i++) {
+  it("injects a wrap-up nudge after hitting the 5-tool-call cap", async () => {
+    for (let i = 0; i < 5; i++) {
       chatMock.mockResolvedValueOnce(
         makeChatResult({
           toolCalls: [
@@ -464,6 +465,6 @@ describe("runAgent2()", () => {
     // Last chat() call should have the cap-nudge user message
     const lastOpts = chatMock.mock.calls.at(-1)![0] as ChatOptions;
     const lastUser = lastOpts.messages.filter((m) => m.role === "user").at(-1);
-    expect(lastUser?.content).toMatch(/4-tool-call cap/i);
+    expect(lastUser?.content).toMatch(/5-tool-call cap/i);
   });
 });
