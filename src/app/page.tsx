@@ -34,7 +34,7 @@ export default function HomePage() {
         </p>
         <p className="mt-6 max-w-prose text-base text-muted-foreground">
           Paste any company URL. Get a personalised outreach package in
-          under a minute — researched by AI, not templated.
+          under 5 minutes — researched by AI, not templated.
         </p>
 
         <div className="mt-10">

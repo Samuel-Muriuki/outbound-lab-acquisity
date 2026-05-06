@@ -10,7 +10,7 @@ import "./globals.css";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://outbound-lab-acquisity.vercel.app";
 const TITLE = "OutboundLab — Multi-agent B2B research";
 const DESCRIPTION =
-  "Paste any company URL and get a personalised outreach package in under a minute — researched by AI, not templated.";
+  "Paste any company URL and get a personalised outreach package in under 5 minutes — researched by AI, not templated.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),
