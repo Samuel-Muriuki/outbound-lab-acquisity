@@ -57,9 +57,19 @@ export type ReconnaissanceOutputT = z.infer<typeof ReconnaissanceOutput>;
 /**
  * Agent 2 — People & ICP
  *
- * Up to 3 decision makers + buyer persona + trigger events.
+ * Up to 4 decision makers + buyer persona + trigger events.
  * Post-validated by validateDecisionMakers() in agent-2-people.ts —
- * each name must appear in its cited source_url or it gets dropped.
+ * each name must appear in its cited source_url or trusted corpus or
+ * it gets dropped.
+ *
+ * Two fields are populated by post-validation, NOT by the agent:
+ *   - confidence: tier classification of the verifying source(s)
+ *   - sources: all URLs that vouched for this DM (source_url + any
+ *     target-domain pages whose body contained the name + linkedin_url
+ *     when present)
+ * Both are optional in the schema so the agent's raw output validates,
+ * and so cached payloads from earlier schema versions (without these
+ * fields) still parse cleanly when the UI consumes them.
  */
 export const DecisionMaker = z.object({
   name: z.string().min(2).max(80),
@@ -74,11 +84,24 @@ export const DecisionMaker = z.object({
     .url()
     .describe("Valid URL where you verified the name."),
   linkedin_url: z.string().url().nullable(),
+  /**
+   * Static curated tier of the verifying source(s). Populated post-
+   * validation; absent on agent-emitted output and on cached rows
+   * from schema_version < 10.
+   */
+  confidence: z.enum(["high", "medium", "low"]).optional(),
+  /**
+   * All URLs that vouched for this DM during validation — source_url
+   * + target-domain pages whose body contained the name + linkedin_url
+   * when present. Tooltip on the People tab lists these. Optional for
+   * the same reason as confidence.
+   */
+  sources: z.array(z.string().url()).optional(),
 });
 export type DecisionMakerT = z.infer<typeof DecisionMaker>;
 
 export const PeopleOutput = z.object({
-  decision_makers: z.array(DecisionMaker).min(0).max(3),
+  decision_makers: z.array(DecisionMaker).min(0).max(4),
   buyer_persona: z
     .string()
     .min(10)

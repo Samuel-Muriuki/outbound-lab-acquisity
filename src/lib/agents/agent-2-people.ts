@@ -10,6 +10,7 @@ import { PEOPLE_SYSTEM, peopleUserPrompt } from "./prompts/people";
 import { webSearchTool } from "./tools/web-search";
 import { webFetchTool } from "./tools/web-fetch";
 import { extractJSON } from "./utils/extract-json";
+import { highestTier } from "./source-tiers";
 import type { EmitFn } from "./stream-events";
 
 const TOOLS: ToolDefinition[] = [webSearchTool as ToolDefinition];
@@ -203,22 +204,30 @@ function normaliseUrlForDedup(url: string): string {
   }
 }
 
+/** A single page in the trusted corpus — URL + lowercased body. */
+interface TrustedPage {
+  url: string;
+  body: string;
+}
+
 /**
  * Fetch the brief's target-domain sources PLUS a small set of
- * conventional team-page paths once and concatenate their bodies
- * into a single trusted corpus. Used to verify that a DM surfaced
- * from a third-party source (e.g. LinkedIn, where fetches usually
- * return a login wall) actually appears on the target company's
- * own pages.
+ * conventional team-page paths once and return them as { url, body }
+ * tuples. Used to verify that a DM surfaced from a third-party
+ * source (e.g. LinkedIn, where fetches usually return a login wall)
+ * actually appears on the target company's own pages — and to
+ * record WHICH page contained the name so the per-DM sources[]
+ * field reflects the real corroboration trail.
  *
- * Returns "" on any failure — callers treat that as "no trusted
- * corpus available, fall through to Tier 2 verification."
+ * Returns [] on any failure or when there are no target-domain
+ * sources to build a corpus from — callers treat that as "no trusted
+ * corpus available, fall through to Tier 3 verification."
  */
 async function buildTrustedCorpus(
   brief: ReconnaissanceOutputT,
   targetDomain: string | null
-): Promise<string> {
-  if (!targetDomain) return "";
+): Promise<TrustedPage[]> {
+  if (!targetDomain) return [];
   const briefSources = brief.sources.filter((url) => {
     try {
       const host = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
@@ -241,18 +250,21 @@ async function buildTrustedCorpus(
   }
 
   const allSources = [...briefSources, ...seedSources];
-  if (allSources.length === 0) return "";
+  if (allSources.length === 0) return [];
 
-  const bodies = await Promise.all(
-    allSources.map(async (url) => {
+  const pages = await Promise.all(
+    allSources.map(async (url): Promise<TrustedPage> => {
       try {
-        return (await webFetchTool.execute({ url })).toLowerCase();
+        const body = (await webFetchTool.execute({ url })).toLowerCase();
+        return { url, body };
       } catch {
-        return "";
+        return { url, body: "" };
       }
     })
   );
-  return bodies.join("\n\n");
+  // Drop pages with empty bodies — they contribute no verification
+  // signal and would just bloat the per-DM sources[] arrays.
+  return pages.filter((p) => p.body.length > 0);
 }
 
 /**
@@ -334,22 +346,32 @@ async function validateDecisionMakers(
   // Build the trusted corpus once from target-domain pages cited in
   // the recon brief. Empty if no target-domain sources or all fetches
   // fail — callers fall through to Tier 3.
-  const trustedCorpus = await buildTrustedCorpus(brief, targetDomain);
+  const trustedPages = await buildTrustedCorpus(brief, targetDomain);
 
   const verified = await Promise.all(
     people.decision_makers.map(async (dm) => {
+      // sources[] tracks every URL that vouches for this DM. Used by
+      // the UI tooltip ("Verified via linkedin.com, crunchbase.com")
+      // and by the confidence classifier (highestTier wins).
+      const verifyingSources = new Set<string>();
+      verifyingSources.add(dm.source_url);
+      if (dm.linkedin_url) verifyingSources.add(dm.linkedin_url);
+
       // Tier 1: source on the target's own domain — accept.
       if (targetDomain && isOnTargetDomain(dm.source_url, targetDomain)) {
-        return dm;
+        return finaliseDM(dm, verifyingSources, targetDomain);
       }
 
       // Tier 2: name appears on the target's own pages, regardless of
-      // where the agent cited it from (LinkedIn slugs, etc).
-      if (
-        trustedCorpus.length > 0 &&
-        trustedCorpus.includes(dm.name.toLowerCase())
-      ) {
-        return dm;
+      // where the agent cited it from (LinkedIn slugs, etc). Record
+      // every page whose body contains the name — they're all
+      // verifying sources, and the highest-tier among them sets
+      // confidence.
+      const lcName = dm.name.toLowerCase();
+      const matchingPages = trustedPages.filter((p) => p.body.includes(lcName));
+      if (matchingPages.length > 0) {
+        for (const p of matchingPages) verifyingSources.add(p.url);
+        return finaliseDM(dm, verifyingSources, targetDomain);
       }
 
       // Tier 3: cross-domain source — fetch and require BOTH name and
@@ -368,7 +390,7 @@ async function validateDecisionMakers(
       }
 
       const lcContent = content.toLowerCase();
-      const nameInBody = lcContent.includes(dm.name.toLowerCase());
+      const nameInBody = lcContent.includes(lcName);
       if (!nameInBody) {
         emit({
           type: "agent_thinking",
@@ -387,12 +409,35 @@ async function validateDecisionMakers(
         return null;
       }
 
-      return dm;
+      return finaliseDM(dm, verifyingSources, targetDomain);
     })
   );
 
   return {
     ...people,
     decision_makers: verified.filter((d): d is NonNullable<typeof d> => d !== null),
+  };
+}
+
+/**
+ * Attach confidence + sources metadata to an accepted DM. The tier is
+ * the highest-confidence source among all verifying URLs (including
+ * the LinkedIn URL when present — LinkedIn classifies as HIGH so a
+ * Tier 3 cross-domain DM with a LinkedIn URL still pulls HIGH
+ * confidence).
+ */
+function finaliseDM(
+  dm: PeopleOutputT["decision_makers"][number],
+  verifyingSources: ReadonlySet<string>,
+  targetDomain: string | null
+): PeopleOutputT["decision_makers"][number] {
+  const sources = Array.from(verifyingSources);
+  const confidence = highestTier(sources, {
+    targetDomain: targetDomain ?? undefined,
+  });
+  return {
+    ...dm,
+    confidence,
+    sources,
   };
 }
