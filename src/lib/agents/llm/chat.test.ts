@@ -199,4 +199,86 @@ describe("chat() fallback chain", () => {
 
     await expect(chat(baseOpts)).rejects.toBeInstanceOf(AllProvidersFailedError);
   });
+
+  it("falls through on AI_RetryError (AI SDK retry-exhaustion wrapper)", async () => {
+    // Regression guard for the live 2026-05-06 bug: Groq returned 429s
+    // until the AI SDK exhausted its internal retries, then threw an
+    // AI_RetryError whose message ("Failed after 3 attempts. Last
+    // error: Provider returned error") didn't match isRetryable's
+    // keyword regex. Old chat() rethrew immediately and never tried
+    // Gemini. The new logic recognises the name + unwraps status from
+    // lastError.
+    const inner429 = Object.assign(new Error("429 Too Many Requests"), {
+      statusCode: 429,
+    });
+    const retryError = Object.assign(
+      new Error("Failed after 3 attempts. Last error: Provider returned error"),
+      {
+        name: "AI_RetryError",
+        lastError: inner429,
+        errors: [inner429, inner429, inner429],
+      }
+    );
+    const groq = fakeProvider("groq", { kind: "throw", error: retryError });
+    const gemini = fakeProvider("gemini", { kind: "ok" });
+    setProviders(groq, gemini);
+
+    const result = await chat(baseOpts);
+    expect(result.provider).toBe("gemini");
+    expect(groq.chat).toHaveBeenCalledOnce();
+    expect(gemini.chat).toHaveBeenCalledOnce();
+  });
+
+  it("AllProvidersFailedError message includes per-provider breakdown with statuses", async () => {
+    const rate429 = Object.assign(new Error("rate limit exceeded"), {
+      statusCode: 429,
+    });
+    const timeout = Object.assign(new Error("Connection timeout"), {
+      statusCode: 504,
+    });
+    const groq = fakeProvider("groq", { kind: "throw", error: rate429 });
+    const gemini = fakeProvider("gemini", { kind: "throw", error: timeout });
+    setProviders(groq, gemini);
+
+    let captured: unknown = null;
+    try {
+      await chat(baseOpts);
+    } catch (err) {
+      captured = err;
+    }
+    const error = captured as AllProvidersFailedError;
+    expect(error).toBeInstanceOf(AllProvidersFailedError);
+    expect(error.message).toContain("groq: 429 rate limit exceeded");
+    expect(error.message).toContain("gemini: 504 Connection timeout");
+  });
+
+  it("AllProvidersFailedError unwraps an AI_RetryError to surface the underlying message", async () => {
+    const inner429 = Object.assign(new Error("Too many requests"), {
+      statusCode: 429,
+    });
+    const wrapped = Object.assign(
+      new Error("Failed after 3 attempts. Last error: Provider returned error"),
+      { name: "AI_RetryError", lastError: inner429, errors: [inner429] }
+    );
+    const groq = fakeProvider("groq", { kind: "throw", error: wrapped });
+    const gemini = fakeProvider("gemini", { kind: "throw", error: wrapped });
+    const openrouter = fakeProvider("openrouter", {
+      kind: "throw",
+      error: wrapped,
+    });
+    setProviders(groq, gemini, openrouter);
+
+    let captured: unknown = null;
+    try {
+      await chat(baseOpts);
+    } catch (err) {
+      captured = err;
+    }
+    const error = captured as AllProvidersFailedError;
+    // The message should show the underlying status + message, not the
+    // generic "Provider returned error" wrapper.
+    expect(error.message).toContain("429");
+    expect(error.message).toContain("Too many requests");
+    expect(error.message).not.toContain("Failed after 3 attempts");
+  });
 });
