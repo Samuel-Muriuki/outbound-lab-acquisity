@@ -210,8 +210,11 @@ function PeoplePanel({ result }: ResultCardProps) {
           className="rounded-lg border border-border bg-surface-2 p-4"
         >
           <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-base font-medium tracking-tight">{dm.name}</p>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-base font-medium tracking-tight">{dm.name}</p>
+                <ConfidencePill dm={dm} />
+              </div>
               <p className="text-sm text-muted-foreground">{dm.role}</p>
             </div>
             {dm.linkedin_url && (
@@ -627,6 +630,78 @@ function buildMailtoHref(subject: string | null, body: string): string {
 interface SourceEntry {
   url: string;
   label: string;
+}
+
+type ConfidenceTier = "high" | "medium" | "low";
+
+interface ConfidencePillProps {
+  dm: ResearchResult["people"]["decision_makers"][number];
+}
+
+const CONFIDENCE_LABEL: Record<ConfidenceTier, string> = {
+  high: "Verified",
+  medium: "Likely",
+  low: "Unverified",
+};
+
+const CONFIDENCE_CLASS: Record<ConfidenceTier, string> = {
+  high: "border-agent-1/40 bg-agent-1/10 text-agent-1",
+  medium: "border-agent-2/40 bg-agent-2/10 text-agent-2",
+  low: "border-warning/40 bg-warning/10 text-warning",
+};
+
+/**
+ * Small confidence pill rendered next to a decision-maker's name.
+ *
+ * Tier semantics (per .ai/docs/06-agent-system-design.md and the
+ * static curated lists in src/lib/agents/source-tiers.ts):
+ *   high  ("Verified")   — first-party (target's own domain) OR
+ *                          curated authoritative third party
+ *                          (LinkedIn / Crunchbase / mainstream press)
+ *   medium ("Likely")    — curated developer/industry platform
+ *                          (Medium / dev.to / GitHub / Substack)
+ *   low   ("Unverified") — anything else (default)
+ *
+ * Renders nothing when the DM lacks a `confidence` field — that's the
+ * cached-old-row case (schema_version < 10). Graceful degradation
+ * per the brief: don't show a badge we can't justify.
+ *
+ * Tooltip lists the verifying source domains when `sources` is
+ * available — clicking the tooltip text doesn't navigate, but the
+ * `title` attribute makes it visible on hover for sighted users
+ * and through screen readers for assistive tech.
+ */
+function ConfidencePill({ dm }: ConfidencePillProps) {
+  const confidence = dm.confidence as ConfidenceTier | undefined;
+  if (!confidence) return null;
+
+  const label = CONFIDENCE_LABEL[confidence];
+  const klass = CONFIDENCE_CLASS[confidence];
+  const sources = dm.sources ?? [];
+
+  // Build tooltip from the verifying source hostnames. Dedup by host
+  // so two pages on the same domain count once.
+  const hosts = Array.from(
+    new Set(sources.map(hostnameOf).filter((h) => h.length > 0))
+  );
+  const tooltip =
+    hosts.length === 0
+      ? `Confidence: ${label}`
+      : confidence === "low"
+        ? `Single uncorroborated source: ${hosts.join(", ")}`
+        : `Verified via ${hosts.join(", ")}`;
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium",
+        klass
+      )}
+      title={tooltip}
+    >
+      {label}
+    </span>
+  );
 }
 
 /**
