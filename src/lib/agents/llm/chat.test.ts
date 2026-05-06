@@ -252,6 +252,50 @@ describe("chat() fallback chain", () => {
     expect(error.message).toContain("gemini: 504 Connection timeout");
   });
 
+  it("honours an explicit providerOrder override (Agent 2's gemini-first policy)", async () => {
+    // Agent 2 passes providerOrder: ["gemini", "groq", "openrouter"]
+    // to load-split away from Groq. Confirm gemini is hit first.
+    const groq = fakeProvider("groq", { kind: "ok" });
+    const gemini = fakeProvider("gemini", { kind: "ok" });
+    setProviders(groq, gemini);
+
+    const result = await chat({
+      ...baseOpts,
+      providerOrder: ["gemini", "groq", "openrouter"],
+    });
+    expect(result.provider).toBe("gemini");
+    expect(groq.chat).not.toHaveBeenCalled();
+    expect(gemini.chat).toHaveBeenCalledOnce();
+  });
+
+  it("providerOrder override skips providers absent from the registry", async () => {
+    const gemini = fakeProvider("gemini", { kind: "ok" });
+    setProviders(gemini);
+
+    // Caller asks for groq-first, but groq isn't registered → silently
+    // dropped, gemini is used.
+    const result = await chat({
+      ...baseOpts,
+      providerOrder: ["groq", "gemini"],
+    });
+    expect(result.provider).toBe("gemini");
+  });
+
+  it("providerOrder override falls through retryable errors in the overridden order", async () => {
+    const rate429 = Object.assign(new Error("rate limit"), { status: 429 });
+    const gemini = fakeProvider("gemini", { kind: "throw", error: rate429 });
+    const groq = fakeProvider("groq", { kind: "ok" });
+    setProviders(groq, gemini);
+
+    const result = await chat({
+      ...baseOpts,
+      providerOrder: ["gemini", "groq"],
+    });
+    expect(result.provider).toBe("groq");
+    expect(gemini.chat).toHaveBeenCalledOnce();
+    expect(groq.chat).toHaveBeenCalledOnce();
+  });
+
   it("AllProvidersFailedError unwraps an AI_RetryError to surface the underlying message", async () => {
     const inner429 = Object.assign(new Error("Too many requests"), {
       statusCode: 429,
