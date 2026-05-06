@@ -26,18 +26,25 @@ const providers: LLMProvider[] = [
 ];
 
 /**
- * All three providers raised — agents should surface a graceful "demo
- * capacity reached" rather than a cryptic stack trace.
+ * All providers raised — agents should surface a graceful "demo capacity
+ * reached" rather than a cryptic stack trace. Message includes the full
+ * per-provider breakdown so the operator can immediately see which
+ * provider failed how (e.g. "groq: 429 rate-limited; gemini: timeout;
+ * openrouter: 401 invalid key") rather than just the last one.
  */
 export class AllProvidersFailedError extends Error {
   readonly errors: ReadonlyArray<{ provider: ProviderName; error: Error }>;
 
   constructor(errors: ReadonlyArray<{ provider: ProviderName; error: Error }>) {
-    const last = errors[errors.length - 1];
+    const breakdown = errors
+      .map(({ provider, error }) => {
+        const status = getStatus(error);
+        const statusPart = typeof status === "number" ? `${status} ` : "";
+        return `${provider}: ${statusPart}${unwrapErrorMessage(error)}`;
+      })
+      .join("; ");
     super(
-      `All ${errors.length} LLM providers failed.${
-        last ? ` Last error from ${last.provider}: ${last.error.message}` : ""
-      }`
+      `All ${errors.length} LLM providers failed. ${breakdown || "(no providers configured)"}`
     );
     this.name = "AllProvidersFailedError";
     this.errors = errors;
@@ -47,15 +54,49 @@ export class AllProvidersFailedError extends Error {
 const RETRYABLE_HTTP_STATUS = new Set([408, 429, 500, 502, 503, 504]);
 
 /**
- * Pull the HTTP status off an error regardless of whether it came from
- * the AI SDK (`statusCode`) or a hand-crafted error in tests (`status`).
+ * Pull the HTTP status off an error — handles three shapes:
+ *  1. AI SDK `APICallError` — `statusCode` on the error itself
+ *  2. Hand-crafted test errors — `status` on the error itself
+ *  3. AI SDK `AI_RetryError` — wraps a list; recurse into `lastError`
+ *     so the underlying 429 is still detectable.
  */
 function getStatus(err: unknown): number | undefined {
   if (!(err instanceof Error)) return undefined;
-  const e = err as { status?: unknown; statusCode?: unknown };
+  const e = err as {
+    status?: unknown;
+    statusCode?: unknown;
+    lastError?: unknown;
+  };
   if (typeof e.statusCode === "number") return e.statusCode;
   if (typeof e.status === "number") return e.status;
+  // Unwrap RetryError → its lastError typically carries the real status.
+  if (e.lastError) return getStatus(e.lastError);
   return undefined;
+}
+
+/**
+ * Returns the error name when it's set (catches `AI_RetryError` and
+ * other tagged AI SDK errors).
+ */
+function getErrorName(err: unknown): string {
+  if (err instanceof Error) return err.name;
+  return "";
+}
+
+/**
+ * Unwrap an error's message — when an `AI_RetryError` wraps a per-call
+ * failure, the wrapper message is generic ("Failed after 3 attempts.
+ * Last error: Provider returned error") and the actually-useful message
+ * is on `lastError`. Surface that instead so the operator sees the
+ * underlying 429 or quota line.
+ */
+function unwrapErrorMessage(err: unknown): string {
+  if (!(err instanceof Error)) return String(err);
+  const e = err as { lastError?: unknown };
+  if (e.lastError instanceof Error && e.lastError.message) {
+    return e.lastError.message;
+  }
+  return err.message;
 }
 
 /**
@@ -90,13 +131,24 @@ function isToolUseFailed(err: unknown): boolean {
 function isRetryable(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
   if (err.name === "AbortError") return false;
+  // AI SDK exhaustion wrapper — almost always wraps a transient
+  // upstream failure (429, network blip, timeout) that the SDK already
+  // retried 2-3 times. Treat as retryable so we fall through to the
+  // next provider rather than dead-ending. Underlying status (if any)
+  // is also unwrapped via getStatus() above for the explicit check.
+  const name = getErrorName(err);
+  if (name === "AI_RetryError") return true;
   const status = getStatus(err);
   if (typeof status === "number" && RETRYABLE_HTTP_STATUS.has(status)) {
     return true;
   }
   if (isToolUseFailed(err)) return true;
-  return /rate.?limit|quota|exhaust|unavail|timeout|fetch failed|ECONNRESET|ETIMEDOUT/i.test(
-    err.message
+  // Unwrap once for the message regex too — RetryError.message is
+  // generic ("Failed after 3 attempts. Last error: …") so we want to
+  // grep the underlying message instead.
+  const message = unwrapErrorMessage(err);
+  return /rate.?limit|quota|exhaust|unavail|timeout|fetch failed|ECONNRESET|ETIMEDOUT|Provider returned error/i.test(
+    message
   );
 }
 
@@ -127,15 +179,27 @@ export async function chat(
       const error = err instanceof Error ? err : new Error(String(err));
       errors.push({ provider: provider.name, error });
 
-      if (!isRetryable(err)) {
+      const status = getStatus(error);
+      const name = getErrorName(error);
+      const unwrapped = unwrapErrorMessage(error);
+      const retryable = isRetryable(err);
+
+      // Structured per-provider log line — gives the operator a clear
+      // record of WHY each fallthrough happened. Always logs (warn
+      // for retryable, error for non-retryable) so production logs
+      // capture the full chain rather than just the surfaced error.
+      const tag = retryable ? "warn" : "error";
+      const log = retryable ? console.warn : console.error;
+      log(
+        `[chat] ${tag} provider=${provider.name} retryable=${retryable} ` +
+          `name=${name || "Error"} status=${status ?? "n/a"} message="${unwrapped}"`
+      );
+
+      if (!retryable) {
         // Non-retryable — surface immediately, don't waste fallback budget
         // on bugs (e.g. malformed schemas, abort signals).
         throw error;
       }
-      console.warn(
-        `[chat] ${provider.name} retryable error, falling through:`,
-        error.message
-      );
     }
   }
 
