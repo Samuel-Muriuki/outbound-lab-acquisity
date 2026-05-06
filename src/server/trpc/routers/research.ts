@@ -12,6 +12,7 @@ import { getOrCreateSessionId } from "@/lib/session/cookie";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import {
   deleteRun,
+  findCachedRun,
   getAgentDoneMessages,
   getRunStatus,
   type AgentMessageRow,
@@ -19,6 +20,8 @@ import {
 import { runResearch, type ResearchResult } from "@/lib/agents/orchestrator";
 import { runAgent3 } from "@/lib/agents/agent-3-email";
 import { SCHEMA_VERSION } from "@/lib/agents/schema-version";
+import { getClientIp } from "@/lib/rate-limit/client-ip";
+import { isOnCooldown, markTriggered } from "@/lib/rate-limit/cooldown";
 import type { AgentIndex, StreamEvent } from "@/lib/agents/stream-events";
 
 const RunIdInput = z.object({
@@ -43,7 +46,7 @@ export const researchRouter = router({
    */
   create: publicProcedure
     .input(ResearchInput)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const { url, tone, channel } = input;
       const target_domain = normaliseDomain(url);
 
@@ -57,6 +60,28 @@ export const researchRouter = router({
           message: BLOCKED_MESSAGE,
         });
       }
+
+      // Per-IP cooldown — protects free-tier provider quotas from
+      // debug-iteration loops. When the same IP fires another fresh
+      // request for the same domain inside the cooldown window AND
+      // we have a recent cached result, hand back the cached run_id
+      // instead of spinning up a fresh orchestrator pass. Silent
+      // when no cached run exists yet (first-time visitor proceeds
+      // normally even if their IP+domain happens to be on cooldown).
+      const clientIp = getClientIp(ctx.headers);
+      if (isOnCooldown(clientIp, target_domain)) {
+        const cached = await findCachedRun(target_domain);
+        if (cached) {
+          console.info(
+            `[trpc research.create] cooldown hit ip=${clientIp} domain=${target_domain} → reusing run ${cached.id}`
+          );
+          return { run_id: cached.id };
+        }
+        // No cached run available — fall through. Still mark
+        // triggered so the next attempt within the window also
+        // sees cooldown.
+      }
+      markTriggered(clientIp, target_domain);
 
       let supabase;
       try {

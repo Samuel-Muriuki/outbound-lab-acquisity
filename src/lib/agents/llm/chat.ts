@@ -26,6 +26,28 @@ const providers: LLMProvider[] = [
 ];
 
 /**
+ * Resolve the provider chain for a single chat() call. With no
+ * override, returns the global registry in its locked order
+ * (groq → gemini → openrouter). With an override (e.g. Agent 2
+ * passing [gemini, groq, openrouter] to load-split away from
+ * Groq's TPM ceiling), returns the registered providers in the
+ * caller-specified order. Names absent from the registry are
+ * silently dropped.
+ */
+function resolveChain(
+  order: ReadonlyArray<ProviderName> | undefined
+): LLMProvider[] {
+  if (!order || order.length === 0) return providers;
+  const byName = new Map(providers.map((p) => [p.name, p]));
+  const chain: LLMProvider[] = [];
+  for (const name of order) {
+    const p = byName.get(name);
+    if (p) chain.push(p);
+  }
+  return chain;
+}
+
+/**
  * All providers raised — agents should surface a graceful "demo capacity
  * reached" rather than a cryptic stack trace. Message includes the full
  * per-provider breakdown so the operator can immediately see which
@@ -168,7 +190,13 @@ export async function chat(
 ): Promise<ChatResult> {
   const errors: { provider: ProviderName; error: Error }[] = [];
 
-  for (const provider of providers) {
+  // Resolve the provider chain for this call. If the caller gave an
+  // explicit providerOrder, honour it (skipping any names that aren't
+  // in the global registry); otherwise fall back to the locked
+  // default [groq, gemini, openrouter].
+  const chain = resolveChain(opts.providerOrder);
+
+  for (const provider of chain) {
     if (!provider.isAvailable()) continue;
 
     try {
