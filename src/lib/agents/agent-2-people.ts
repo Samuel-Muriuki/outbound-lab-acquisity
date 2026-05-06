@@ -14,8 +14,12 @@ import type { EmitFn } from "./stream-events";
 
 const TOOLS: ToolDefinition[] = [webSearchTool as ToolDefinition];
 
-/** Hard cap from `.ai/docs/06-agent-system-design.md` §7.2. */
-const MAX_TOOL_CALLS = 4;
+/**
+ * Hard cap from `.ai/docs/06-agent-system-design.md` §7.2. Bumped 4 → 5
+ * to make room for engineering-leadership coverage (founder + growth +
+ * sales + engineering) without sacrificing any existing role's search.
+ */
+const MAX_TOOL_CALLS = 5;
 
 /** Per §6.5 — same retry policy as Agent 1. */
 const MAX_RETRIES = 2;
@@ -138,7 +142,7 @@ async function runOnce(
         messages.push({
           role: "user",
           content:
-            "You have hit the 4-tool-call cap. Output the final JSON now using whatever you've gathered. Do not call any more tools.",
+            "You have hit the 5-tool-call cap. Output the final JSON now using whatever you've gathered. Do not call any more tools.",
         });
       }
       continue;
