@@ -15,7 +15,17 @@ import { SCHEMA_VERSION } from "@/lib/agents/schema-version";
  * (caching strategy).
  */
 
-const CACHE_LOOKBACK_DAYS = 7;
+/**
+ * Cache TTL — bumped 7 → 30 for the demo period. The facts the agents
+ * extract (company name, product, decision makers, recent signals)
+ * don't change meaningfully inside a month, and the longer window
+ * protects free-tier provider quotas from spending budget re-running
+ * the same target every week. Schema_version invalidates rows whenever
+ * agent prompts / validators change in a way that would make older
+ * results untrustworthy, so freshness on the *interesting* axis is
+ * still gated.
+ */
+const CACHE_LOOKBACK_DAYS = 30;
 
 export interface CachedRunRow {
   id: string;
@@ -26,11 +36,13 @@ export interface CachedRunRow {
 }
 
 /**
- * 7-day exact-domain cache lookup. Returns the most recent successful
- * run for the given normalised domain, or null.
+ * Exact-domain cache lookup within the CACHE_LOOKBACK_DAYS window.
+ * Returns the most recent successful run for the given normalised
+ * domain, or null. Filtered on the current SCHEMA_VERSION so any
+ * row from a previous agent-prompt generation is silently skipped.
  *
- * Phase 2 introduces vector-similarity matching on top of this; Phase 1
- * is exact-domain only.
+ * Phase 2 introduces vector-similarity matching on top of this;
+ * Phase 1 is exact-domain only.
  *
  * Source: `.ai/docs/06-agent-system-design.md` §10.
  */
