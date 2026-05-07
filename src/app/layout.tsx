@@ -7,7 +7,16 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://outbound-lab-acquisity.vercel.app";
+// Hardcoded canonical production URL — intentionally NOT read from
+// process.env.NEXT_PUBLIC_APP_URL. The og:url, og:image, twitter:image
+// and metadataBase all flow through this constant; an env-var typo
+// (or a stale value from an earlier deployment slug) would otherwise
+// silently point share previews at a 404 domain. The canonical URL
+// is, by definition, fixed for this deployment — no good reason to
+// let an env var override it. Preview deploys' previews can stay
+// pointed at canonical for the same reason: they shouldn't be
+// shared on LinkedIn/Twitter anyway.
+const APP_URL = "https://outbound-lab-acquisity.vercel.app";
 const TITLE = "OutboundLab — Multi-agent B2B research";
 const DESCRIPTION =
   "Paste any company URL and get a personalised outreach package in under 5 minutes — researched by AI, not templated.";
